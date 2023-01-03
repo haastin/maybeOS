@@ -1,0 +1,304 @@
+Creating boot sector file that is 512 bytes. Wrote a java program for it bootsector_bytefile.java
+
+use Qemu to emulate a CPU to run the boot sector disk on
+
+Do the same but with assembly
+
+can write this to a bootable medium (such as USB drive; you are writing to the sectors of the USB drive itself, not inserting the disk image into the USB's filesystem)
+or just use the emulator again
+
+the variable the_secret's offset value is realtive to the program it originates from. So it may be 43 bytes in to the program, and there the_secret == 43 bytes, so calling it you have to account for where the program itself is in memory and add that to where the variable is in the program
+
+stack grows downwards in memory (towards 0x0000) and new 'push' targets are added to the bottom of the stack
+
+conditional jumps in assembly use flags register for cmp result, je, jle, etc as a followup
+
+1 byte = 8 bits, 2 bytes = 1 hex number (2 digits)
+
+so we have segment addressinf to extend how far we can reach into memory with basic CPU registers with the addition of 4 spcified
+registers that are shifted left one and then have the desired address' value (offset) added on to it so that we can have an extra
+potential 4 bits of memory spots on the end. why only 4? why not shift more? im not sure but my guess is that they want to provide 
+some sort of overflow. UPDATE: ok i have some new info. appararently there is something called 'real mode' which is a program that uses
+BIOS subroutines w/ OS subroutines, whereas a protected mode program only uses OS subroutines. So in real mode you can have a 20 bit address
+even though the CPU is '16 bit mode' because there are actually 20 address pins on the CPU (which explains why this can be done with
+accessing address' in memory but not for 20 bit integers, strings, etc.). Apparently the 'Address Bus' is what gives the 20 pins. 
+
+More info! Ok so it seems like there a direct split between the amount of bits stored in each memory cell versus how many memory cells we 
+can actually access. So a 16 bit CPU has 16 bits of info in each memory cell, including its registers. 
+
+
+
+BIOS checks hardware and memory before the boot sector is loaded
+BIOS interrupts for various ways to access/use hardware
+registers for desginated interrupts
+stack for saving something temporarily while you borrow the same memory address
+comparisons and jumps 
+accessing address spots by specific bytes
+incrementing an address
+accessing data at an address
+defining strings as ascii values written directly to a file
+labels as 'variables' which are offsets to access a point of data (int, string, etc)
+org directive to compensate for offsets only offsetting from the beginning of the program's point in memory, not offsetting from total memory
+hard drives store data through magnetizing a spot (or not)
+Cylinder-Head-Sector addressing is used to read data from a disk, where cylinder is a measure of which subcircle to read based on how from
+this subcircle is from the edge of the disk, head is which surface we want (top or bottom of which disk in the stack of disks we want), and 
+sector is a measure alongthe circumference of the disk
+segment addressing (expounded upon above)
+how our disk device connects to the CPU through which bus type (USB, SATA, etc) can be abstracted by BIOS
+we write what data we read from the disk to ES:BX, which we have to set before calling the interrupt
+to verify if we read from the disk correctly, we can reference al, which is set to the number of sectors actually read, or use the command
+jc, which checks the carry flag register for a general fault
+
+
+
+
+
+
+Even though a word is represented with four 4-bit chunks (which is 2 bytes, each byte is two of the four bit chunks combined),
+strings and integers are not necessarily represented with a full 16 bits. A char in a string is represented in one byte, 8 bits.
+
+just figured out that the reason I was having issues getting print_hex_string to work is that the input for al when using 0x10 interrupt is the 
+value of the ASCII code you want to print- NOT the address that that letter is stored at! I assumed that you give al the address and it goes
+and fetches whatever value is stored there, but this is NOT the case. 
+
+also had lots of issues being confused with trying to check i was isolating nibbles correctly in my 16 bit word, and when I tried to use 0x10
+i kept getting the numbers to come out correctly on screen during my tests but not the letters. so i assumed my logic statements were faulty somehow,
+but they werent, i tested each piece. i realized that when i add 48 to my current byte (dl or dh) and print it, adding 48 only works if its a digit!
+if its a letter or other charcater adding 48 will just bring it to a random character, not what its value actually is (eg. i tried to print 0x000f 
+to the screen but I got '?' as the output, then realized f (15 in decimal) +48 is the ascii code of a question mark, so the logic is correct!).
+
+it would seem that the %include literally just includes the code, so you have to stop the program before the line that %include is utilized or else
+itll re-execute the block of code again
+
+mov dx, cx didnt work but mov cx, dx did- dont know why
+
+ add [bx], dl doesnt work, but mov [bx], dl does because when i db "0x0000" at HEX_OUT, a 0 inside of quotes is NOT written to the file as 0- its 
+ written to the file as the ASCII code for 0, same with all the other hex digits 1-f, so I was failing to accoutn for that!
+
+ COMPLETED PRINT_HEX_STRING HEYOOOOOOOOOOO <3
+
+Completed the disk_load test, initially there was a disk error when I tried to read 5 sectors past BIOS but I had only 2 secotrs total after BIOS, so
+it seems like if you tried to load sectors that don't exist you get that error
+
+
+32 bit mode:
+
+can access more memory, up to 4GB with 32 bit offsets
+can protect pieces of code from each other with memory protection; virtual memory allows us to switch data between disk and memory
+
+have to set up Global Descriptor Table (GDT) in memory which defines memory segments and their protected-mode attributes
+we use a speical instruction to load it into the CPU, and then switch a bit in a special register to officially switch from
+16 bit real mode to 32 bit protected mode 
+
+we have to do this because code from C/C++ is compiled to 32 bit mode, not 16 bit mode, so if we want to utilize the CPU in 32 bit mode
+we have to set up the GDT because otherwise we wouldnt be able to switch to 32 bit mode, and subsequently wouldnt be able to use C/C++
+for writing code for the OS in the future instead of assembly. but to get there we do still hve to write GDT in assembly
+
+we cant use BIOS in 32 bit mode, so we need new ways of interacting with the CPU (maybe something launched by BIOS??)
+
+one way of interacting with the screen without BIOS routines is by writing at the Video Graphics Array (VGA) desginated spot in memory where it
+takes whats in memory and translates that to instructions for printing to the screen. You write the char ASCII code and attributes (2 bytes total)
+
+so in 32 bit mode we still use segment registers and offsets to reach into memory, but segment registers now point to a particular segment 
+descriptor in the GDT. a segment descriptor is a 64 bit structure that defines a protected-mode segment by its Base Address (where the segment
+starts in physical memory (RAM!); its 32 bits), segment limit (size of segment; 20 bits), and various flags such as whether its read or write only, etc.
+
+it seems that there can be many configurations of the GDT depending on how you want to strcture your memory, but the simplest is to have a code 
+segment and a data segment, which overlap and cover the full 4GB of addressable memory, and also utilizing paging features in virtual memory (which
+again is transferring data not frequently used in a program from RAM to disk memory)
+
+first descriptor in GDT is always 64 bits of 0s, (8 bytes of zeros in other terms), which is the null descriptor. if we try and access an address
+with a segment descriptor that hasnt been intialized to the proper descriptor than it will lead to the null descirptor during an addressing 
+attempt which causes the CPU to raise an interrupt
+
+omg so i think i finally understand virtual memory. So disk memory is typically not commonly used in programs (not sure about BIOS and all that), RAM
+primarily is. Since a program maybe require more storage than RAM allows, parts of the program that are infrequently used will be stored in memory on
+the disk. They are not necessarily stored sequentially on the disk, and other stuff that is stored on the disk that the program utilizes, like libraries
+are ported into RAM when needed. So basically virtual memory takes all these elements all over the place- the libraries on the disk in one place,
+variables on the disk in other places, stuff thats on RAM, etc. and combines it all into a seemingly contiguous segment of memory for the program.
+This allows more security (no overlapping segments of code), increased memory access, sharing libraries between multiple programs (as opposed to having to
+have a copy of a library in every program's memory if the memory wasn't virtually built and was strictly sequential in RAM/disk)
+
+the cpu needs the size of our GDT table, so we actually have a GDT descriptor as well, 6 bytes, that gives the size of the descriptor (2 bytes)
+and the address of the start of the GDT table (32 bits)
+
+so as I was creating the GDT table in .asm file, I was super confused because the example gave the order of the flags + type in the reverse order
+of what I expected. I was a bit confused because of little endian formatting. so even though our code segment of GDT is 64 bits, each piece
+of that 64 bits written to the file (whether the piece is a byte, a word, or a double word long) will be written in little endian format. so little
+endian ordering is NOT applied to the overall 64 bits, which I mistakenly thought, it is applied to each piece within it written individually. and 
+even though each piece might be a diff length, byte vs word, etc., we use our knowledge of how the file was written to access components, so we would
+know not to access a word's worth of data at the spot where we only wrote a byte to the file, or else we would get jumbled numbers, etc. Or if we do
+in that example, we can simply take the highest 8 bits of that word instead of the whole thing, etc. other tricks like that.
+Another important note on this: little endian is applied to BYTES, not bits. so its not like you read the entire number backwards when you are 
+writing it to a file, its just the order of the bytes. 
+
+lgdt[GDT_descriptor] and cr0, making its 0 bit equal to 1, which officially sets CPU to 32 bit protected mode
+
+due to CPU pipelining which can execute instructions simultaneously but not sequentially to make processing faster, whhich can create the risk that 
+at the same moment (or before this is completed) we are have just switched to 32 bit mode, the CPU executes instructions immediately after that
+even though it is not safely in 32 bit mode yet guaranteed, which could cause errors. So, we have to stop the pipelining by issuing a jump call outside
+the current segment we are working in so that it can't execute anything else before it is switched over (diff segment because of the restrictions around
+reading other segments is my guess, not totally sure, whereas if its in the same segment it can potentially keep reading past the jmp call in the same
+segment we are alreayd working in. again, not totally sure of this.
+    -i actually think the above is because it reads the next few instructions after the current one in pipelining, so the jmp brings us to a different
+address and so the program will execute the commands after the new address we are jumping to
+
+turns out you can have 32 bit registers/instructions in 16 bit real mode, you just have to use a prefix. not sure why or how this happens, but alas.
+    -so i think this is because the whole point is that we have a new CPU that can run higher bit modes, but the legacy OS which was built on lower
+	bit modes can't. so if we limit the 32 bit stuff to the cpu's processes only, than that seems to be fine. but accessing memory outside of the max
+	20 bit range of this oldschool OS routines would not be allowed (this is a guess) because at the time the OS was written it physically couldnt
+	write past that
+
+I've had huge issues tonight. Essentially my test for entering into protected mode isn't working, and it is very hard to debug this. I wasn't sure which
+part of the code screwed up, so I've been checking to see if video memory works, and I think it does. Its hard to test it because in protected mode I 
+can't use interrupts. Gonna keep trying, but man, this has been the toughest thing yet to try and solve.
+
+IT WORKED!!!! I HAVE NO IDEA WHY THO! BRB GONNA TRY AND GO FIGURE OUT WHY :DDDDDDD
+
+Ok not sure why it started working. But I will note the only confusions I have left from this testing.
+-confused why its relevant to even have code and data segments if they are going to completely overlap, why not one segment? 
+-is the CODE_SEG:init_pm CODE_SEG part somehow translated into where this specific program starts in memory and then at that init_pm just brings you
+to itself? because the base address being 0 confuses me, because i would assume then that this program is loaded at base 0, but then how can the other
+data be as well? isnt that writing over each other?
+-not sure why we have to disable interrupts using cli before switching modes
+-confused about the near vs far jump thing. how is this 'new segment' being offset by literally like one line a 'far jump'? confused about this topic 
+overall.
+-still not clear on what all the cd, ds, si, blah blah blah reigsters do/what is their specific purpose use?
+
+
+
+C mode:
+
+assembly is closely tied to a specific CPU architecture, so it would be harder to port OS to other CPU archs like ARM, etc  
+compiler results in an object file that contains relative (eg textual labels) rather than absolute internal memory references (a specific address like
+0x0000ffff). this is important because it can be combinsed with other object files into one object file, so you can combine routines from different
+places (eg not in the same program; theyre from a library, for instance) into one object file
+
+it is a linker's job to combine all those object files into one binary file that is executable, transitioning the relative memory addresses into
+asbolute memory references now that it knows the final position of all the different pieces of code. it can return multiple versions of an executable
+file with different meta data, which can be useful to telling an OS how to load an app into memory, for debugging purposes (getting a textual address
+of the location of the crash back instead of the absolute address), etc.
+
+C likes to use a stack frame, which is essentially creating a new stack for each function call, by pushing the base pointer's prior location on to the
+stack and then reassigning it to the bottom of the previous stack. this allows every function to have its own designated space- but im not sure how that
+wouldnt already happen sequentially in memory. 
+
+i was really struggling to fix the errors i was getting trying to follow the book where they have a simple c file without one function total (its not
+the main function), and i kept getting linker errors. it turns out that C needs the main function if it is being run ON an OS unless you use a specific
+flag -e to 'enter' the program from another start point besides the main function. apparently there is a library file (libc) in the linker that directs 
+the beginning of linking called _start which does some setup and then calls main. so you are in essence bypassing -start by using -e (i think). the
+general consensus seems to be that this is weird and not used often. it is a rule however, that c can be used without main when launching an OS itself,
+but when trying to compile it through a terminal thats built on an OS, you need main. 
+
+just as a point, C storing local variables 'on the stack' is different from BIOS who stores its "vriables" (label ofssets) in seqeuntial order inside
+the file itself. i think thats why i may have felt the stack frame thing was so strange- because it is a whole new approach of where to store the data
+inside the program
+
+ok, sorry ive been on a hunt to figure out this ld thing. it turns out that the library used to start the linking process (libSystem), was deleted
+from the old place where the command used to look for it in one of Apple's updates, because apparently there is now a "built in dynamic-linker cache
+of all system-provided libraries", so all copies on the filesystem were deleted. I have no idea what the cache thing means, but i did install the new
+version of commandlinetools previously and when using ld (which checks for a dynamic library at usr/lib) it fails and we have to specify where the
+libSystem library is with the directory of where it is installed now (/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib.). Still confused on
+this all but thay's good enough for me right now
+
+ld still isn't working for the no-main-function basic.c version, so I guess we'll fight that battle later.
+
+cpu optimizes efficiency by treating different types as all taking 16 bytes of memory, even if they don't (an int takes 4 bytes), but 0x10 bytes is
+pushed on to the stack anyways 
+
+it is actually more efficient to use [ebp - 0x4] rather than transferring ebp to another register, subtracting the constant, and then moving baba in, 
+which takes 3 lines instead of one- this apparnetly can allow more per instruction cycle. more efficient use by CPU by referencing a variable
+passed to it that is stored in a previous stack frame ([ebp + 0x8], which goes to the top of the previous stack frame because when we entered the callee
+function we pushed ebp on, so that presumably takes 8 bytes of space).
+
+Useful to know how a high-language compiler's calling convention; for ex deffault calling convention of C is to put the first arguments passed to a
+function on the stack last, so that they are at the top.
+
+to directly access a point in memory, C allows us to have pointers (other high level languages may not even allow you to directly access a spot in
+memory of your choosing) which allow us to store an address as a value and assign or retrieve data from that address using the tetxual label of that
+same pointer. pointer* = address; *pointer = data at the address previously stored in pointer. 
+
+all pointers technicaly have the same datatype (a 32 bit memory address), but we create differeny types of pointers corresponding to the data we 
+want to assign or retrieve from the address we are storing, so that the size of the data is known at the time we retrieve it
+
+omg im getting better. without any prompting or clues, i (don't know if this is actually correct) guessed that the reason java forces you to initialize
+a string (and the implementation of its immutability) is that it stores the string in the form of a fixed-sized array that is created at the time of
+initialization
+
+omg. turns out this tutorial is unfinished lmao. i guess ill complete it and see if i can make my way on my own after that with adding new features
+
+its ok. my goal is to build on OS, not to do it specifically from this book. ill finish this book since it is well written and consult other sources
+for the missing pieces. love you austin <3 :)
+
+so you can actually combine your kernel and bootloader into one file called a kernel image where the kernel is in the sectors adjacent to the bootloader
+so that you can read the sectors past the boot sector (your kernel) and load them into memory. the point of this is because it would be too hard for
+BIOS to read the disk after switching into protected mode, and without BIOS' abstraction for the disk hardware we'd have to write a disk driver ourselves
+
+when you choose a place in memory to load the kernel the compiler will precede the code of the entry function (where all the other functions are called)
+with the other functions you've created, so to make sure the kernel starts from the entry function a mini assembly program is written to call the
+entry function (by its textual name, which the linker resolves into physical addresses), using [extern <function name here>] to assure the compiler
+that the entry function's name is in another file, not this one, so it doesn't need to throw an exception for a function called that doesn't exist in
+this file
+
+you can specify the type of format you want an objetc file to be compiled in (our mini asm file we compile it as ELF format, which is what C compilers
+format C programs by (you can obv choose a diff format there, but some are ELF))
+
+make becomes a useful tool when we have SEVERAL dependencies that would have to have multiple recompilcations before being able to run the intended
+program again. 
+the clean target is useful if you’d like to distribute only the source files, put the directory under version control 9so that you can track every change
+made to your files), or if you’d like to test that modifications of your makefile will correctly build all targets from scratch.
+there are more make tricks, im a bit lost on how i would get to the level of undertstanding the book displays, but to see an apparently valid set of 
+rules in the makefile to reduce typing for all source files and object files go to the book page 57.
+
+it is suggested that it would be wise to seperate the OS files into 3 general categories: boot, kernel, and drivers. content is self-explanatory
+
+pre-processor replaces constants or if statements that are dependent on a compile-time result, not runtime, so for ex: #ifdef DEBUG \n print(x) #end if.
+you can actually define some variables like DEBUG on a command line when you run the compile instructions, which apparently can reduce amount of memory
+needed by an application, OS, or such by including or excluding sections of code based on how you define that variable on the command line
+
+didnt do a good job of explaining these (book starting to go a wee bit downhill ;( ):
+#include directive
+protoypes (declaring functions at start of file)
+header files
+
+Holy fuck i have so much to write. I've done SOOOOOO much research to try and get this org directive for the linker to work. Like, so much. I found out that apple's linker doesn't have
+the versatility I need (I identified that it is, in fact, Apple's version), and thus found out about and downloaded the GNU linker command (called ldrdf), which I also found out is seperate
+from GNU's compiler. I just realized that what I call commands on the command line are actually binary files (executables) that are run in terminal simply by typing their name. so, for 
+example nasm and qemu-system-x86_64 was in the same file (usr/local/bin) as well! So thats how i figured out GNU calls their linker ldrdf and not ld. But more to write about later, still need
+to figure out if what I'm doing is correct.
+
+I get the point of brew now. It seems like installing open source software can be incredibly complex, you have to cofigure it to your OS, computer, blah blah blah, and have to go through a 
+lot before you can actually fucking install it. brew does it for you!
+
+so confused. so, so cofused. ive tried so many paths and so many have failed. so many.
+
+im confused about all this native vs. cross bullshit. i thought if my laptop has the same CPU as a lot of other OS' cpus, then i would be fine because all I would need to do is to write code
+that compiles to the machien code used by my laptop (and thus a lot of other systems as well). But, it seems like instead of being compiled to machien code the CPU understands, compilers
+like to compile to a format that the kernel uses. so this is I guess where cross-compilers come in where you use your current native shit to build shit for other systems? I literally don't get
+it. starting to just want to pass of project1 from 310 on the resume instead lol. but i really want to code in c and c++ and get a hang of things and feel confident going into an interview,
+not bootsrapping it based on work i did years ago. 
+
+this whole issue of the cross compiling/linking thing came up because apparently bin-utils doesn't install ld to Darwin computers because it 'doesn't support Darwin'. what the fuck does that
+mean? why not?? so then cross-compiling comes up because apparently 
+
+ok a little bit of maybe-useful info is that the way people are phrasing the convo above is 'does it not build at all on Darwin, or does it not target Darwin? In my use case I would like to 
+just generate a normal ELF just as if I were on linux.' So this seems to suggest that there's a Darwin format versus ELF. research time. oh and a followup comment to that question i quoted:
+'You can build binutils as cross-tools, hosted on macOS and targeting ELF/Linux.' 
+
+woah. so i just learned the power of java virtual machine, which is essentially that the compiled code can be run anywhere with the java VM installed. cool. i still dont understand what the
+actual substance of the 'native machine' is (hardware? kernel?).
+
+did just confirm that cross-compiling can ba used only when the OS is diff and the hardware is the same.
+
+it feels like literally nothing im doing is working. tried once again to use xcode ld to see if i could get the offset for it to load my object file at 0x0 but installing binutils fucked
+something. im seriously thinkinh of just reviewing all my code from college assignments so far and building a resume based on it, and then seeing if that lands me anywhere for fall. if it 
+doesn't, that's ok, i can keep trying on this fucking microkernel lol, but i might make this an ongoing project and start a smaller, easier project that i can still add to my resume in the
+meantime because i dont want to let this specific point take me away from my overall goal of trying to code a coding internship period.
+
+ok just thought that dynamically sized arrays are only possible because of virtual memory! another conceptual success!
+
+discovered why package management systems like homebrew are so good, because they can easily uninstall software for you, as opposed to relying on 
+the distributor creating a way to uninstall the code in the source code makefile. discovered this with binutils the hard way :(
+
+I think I have a bit more information that I'm pretty sure is correct. So I finally fixed the (ld emulation: ) error by just deleting /usr/local/bin/ld (which for some reason was NOT placed there by Xcode, or at least if it was it didn't get uninstalled properly). So then I tried the segaddr thing, which maybe worked? Not sure, couldn't figure out how to check. So I just assumed it did and then went back to where I was in the tutorial and as I kept trying to execute the combined file of boot_sector_k (my full boot sector) and kernel.bin (which wasn't actually a bin file!), I realized a problem. The Xcode ld command ONLY outputs files in mach-o format. But for the emu emulator it needs to be one big binary file since it is running on pure hardware. Which got me thinking, so if I can't run a macho file on the hardware- then why is it called a macho executable and where then would I execute it? And that got me thinking... well probably Terminal! The Darwin shell or Mac OS prob has some compiler that itself transition these formats to pure machine code. Why? I have no idea why, but I think that's finally the answer to where the elf/macho files are actually used if not on the actual fucking hardware lol. I'm so far from completing this thing, and will likely put it off again because honestly having a Mac fucking sucks and putting this much time into a project that I have no idea will work, and even if it does will require so much more effort with device drivers, etc. that there likely is better places to practice coding C/C++ than this (I don't know what they are, which has been giving me a lot of panic, but alas, I must trust myself and channel my oldschool resourcefulness. Good work. Love ya <3
+	
