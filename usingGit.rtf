@@ -1,0 +1,30 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2707
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 Git is in Xcode tools, cool.\
+\
+Source of the repo is the project folder you are working in; git init is the code for repo creation\
+\
+Git will track a file for you, but it has to initially be told to track that file; git status is code for showing staged and untracked files\
+\
+A staging environment is where you want to put the files that will be updated in your next commit; git add file_name\
+\
+A branch allows you to create an alternate state of your main project with some changes that differentiate it from the primary branch that is deployed. So, features are developed on alternate branches which are then later on merged onto the primary branch once those changes/features are created and tested; git checkout -b <branch name here>, or git branch to see list of branches\
+\
+So our git right now is local, to connect to GitHub servers for cloud storage and so others (me) can access the code I\'92m writing on my local computer, I can push my local commits to this remote server through Terminal. GitHub gives a specific url for the repository you will use on its servers, and git has a command to link this url to a specific title, so in the future when you are pushing changes to this repository, you just have to use the title instead of the url every time; git remote add <title> <url>\
+\
+You can also download remote repositories to your local machine and in this case git automatically assigns the repository\'92s URL a title of origin, which is why it is the common placeholder title\
+\
+You have to authenticate yourself for the GitHub pushes to work, and initially this must be done through Github\'92s specific authentication process -> at the moment it wants your \'91personal access token\'92 instead of your account password. My current GitHub PAT: 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\
+\
+So based on the above, you do git push origin <branch name> and then use PAT for the verification if asked\
+\
+Pull requests are for non-repo owners to request to submit changes to additions to the code base from a branch that you\'92ve created. The owners can review your code and decide whether to merge the code onto the specified branch you are requesting or not\
+\
+Git seems to work with branches and merges by assigning a SHA ID to the main repo branch and when you make a new branch off of this SHA ID that is noted, but if you try to merge something that wasn\'92t taken off of this original branch then you can\'92t because they would have diff SHA IDs. \
+\
+}
