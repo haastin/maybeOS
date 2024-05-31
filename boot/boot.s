@@ -26,13 +26,10 @@ stack top:
 .type _start, @function
 _start:
 
+    /*at this point we have a code and data segment in a basic GDT passed from GRUB, but not our own GDT,
+and paging isn't enabled*/
     mov esp, stack_top
 
-/*at this point we have a code and data segment passed from GRUB, but no GDT*/
-
-basic_gdt_start:
-
-
-
-
+    //we finish setting up in C now that our stack has been initialized
+    call kernel_start
 
