@@ -15,9 +15,9 @@
 #allocating stack in bss saves space in this file's representation in the fs
 .section .bss 
 .align 16 #System V ABI expects the stack to be 16 byte aligned
-stack_bottom: #this will be at a lower address since it is higher in the file, which is why it's the bottom
+stack_top: #this will be at a lower address since it is higher in the file, which is why it's the bottom
 .skip 16384
-stack top:
+stack_bottom:
 
 .intel_syntax noprefix
 

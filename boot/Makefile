@@ -10,10 +10,10 @@ TARGET = maybeOS.bin
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS)
+$(TARGET): finish_booting.o gdt.o boot.o
 	$(CC) $(LDFLAGS) $^ -o $@
 
-finish_booting.o: gdt.o finish_booting.c
+finish_booting.o: finish_booting.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 gdt.o: gdt.c gdt.h
@@ -21,3 +21,6 @@ gdt.o: gdt.c gdt.h
 
 boot.o: boot.s
 	$(AS) $< -o $@ 
+
+clean:
+	rm *.o *.bin
