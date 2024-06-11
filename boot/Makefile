@@ -1,6 +1,6 @@
-CC = i686-elf-gcc
-AS = i686-elf-as
-CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+CC = i686-elf-gcc 
+AS = i686-elf-as -g
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -g
 LDFLAGS = -T linker.ld -ffreestanding -O2 -nostdlib -lgcc
 
 SRCS = boot.s finish_booting.c gdt.c
@@ -19,8 +19,9 @@ finish_booting.o: finish_booting.c
 gdt.o: gdt.c gdt.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-boot.o: boot.s
-	$(AS) $< -o $@ 
+boot.o: boot.S
+	$(CC) -E -P $< -o $*.i
+	$(AS) $*.i -o $@ 
 
 clean:
-	rm *.o *.bin
+	rm *.o *.bin *.i

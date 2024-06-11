@@ -1,12 +1,11 @@
-/* The bootloader will look at this image and start execution at the symbol
-   designated as the entry point. */
+/* the symbol in my .o files defined to be the entry point */
 ENTRY(_start)
  
-/* Tell where the various sections of the object files will be put in the final
-   kernel image. */
+/* Maps object file sections to memory addresses */
 SECTIONS
 {
-	/* It used to be universally recommended to use 1M as a start offset,
+	/* From OSdev wiki: 
+		"It used to be universally recommended to use 1M as a start offset,
 	   as it was effectively guaranteed to be available under BIOS systems.
 	   However, UEFI has made things more complicated, and experimental data
 	   strongly suggests that 2M is a safer place to load. In 2016, a new
@@ -16,15 +15,16 @@ SECTIONS
 	   address, in order to give the loader freedom in selecting a span of
 	   memory which is verified to be available by the firmware, in order to
 	   work around this issue. This does not use that feature, so 2M was
-	   chosen as a safer option than the traditional 1M. */
+	   chosen as a safer option than the traditional 1M." */
 	. = 2M;
  
 	/* First put the multiboot header, as it is required to be put very early
 	   in the image or the bootloader won't recognize the file format.
 	   Next we'll put the .text section. */
+	
 	.text BLOCK(4K) : ALIGN(4K)
 	{
-		*(.multiboot)
+		*(.multiboot2)
 		*(.text)
 	}
  
@@ -46,7 +46,4 @@ SECTIONS
 		*(COMMON)
 		*(.bss)
 	}
- 
-	/* The compiler may produce other sections, by default it will put them in
-	   a segment with the same name. Simply add stuff here as needed. */
 }
