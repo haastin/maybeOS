@@ -1,7 +1,7 @@
 #ifndef GDT_H
 #define GDT_H
 
-#include "stdint.h"
+#include <stdint.h>
 
 /*everything here was taken as defined in Intel's Segementation memory
 management technique for the IA-32 architecture*/

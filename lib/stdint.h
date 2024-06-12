@@ -1,3 +1,10 @@
+/*
+
+NOT USING THIS FOR NOW--- GOING TO USE COMPILER'S VERSION INSTEAD. WILL KEEP THIS AND RELOOK AT IT
+IF I NEED TO IMPLEMENT THIS TO MAKE maybeOS SELF HOSTED.
+
+*/
+
 typedef signed char int8_t;
 typedef signed short int int16_t;
 typedef signed int int32_t;

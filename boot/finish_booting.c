@@ -1,27 +1,18 @@
 #include "gdt.h"
-#include "stdint.h"
+#include <stdint.h>
 #include "multiboot2.h"
+#include "lib/string.h"
+#include "VGA_driver.h"
 
 #define NUM_GDT_ENTRIES 3
 /*size+7 increases size to the next multiple of 8, & ~7 sets the lower 3 bits to 0*/
 #define ALIGN_TO_8_BYTES(tag_size) ((tag_size + 7) & ~7)
 
-#define FRAMEBUFFER_ADDRESS_OFFSET 8
-#define FRAMEBUFFER_HEIGHT_OFFSET 24
-#define FRAMEBUFFER_WIDTH_OFFSET 20
-#define FRAMEBUFFER_BITSPERPIXEL_OFFSET 28
-
 //we will use a Protected Flat Model, as described in Intel's docs
 //for now, we just build null, kernel code, and kernel data segments
 struct segment_descriptor gdt[NUM_GDT_ENTRIES];
 
-struct multiboot_bootinfo mb_bootinfo;
-uint8_t * framebuffer;
-uint32_t width;
-uint32_t height; 
-uint8_t bits_per_pixel;
-uint8_t bytes_per_pixel;
-
+extern struct multiboot_bootinfo mb_bootinfo;
 
 static void init_gdt(void){
 
@@ -60,29 +51,34 @@ static void store_multiboot2_bootinfo(void){
         :                 // Input operand (none)
         : "%ebx"          // Clobbered register (ebx)
     );
+
     //this loop logic is from GRUB's multiboot2 example code, slightly modified to improve readability
     for(struct multiboot_tag *tag = (struct multiboot_tag *)((char*)multiboot2_bootinfo_startaddress + 8);
         tag->type != MULTIBOOT_TAG_TYPE_END;
         tag = (struct multiboot_tag *)((char *)tag + ALIGN_TO_8_BYTES(tag->size))
         ){
-            if (tag->type == MULTIBOOT_TAG_TYPE_FRAMEBUFFER){
-                framebuffer = *(uint32_t *)((char *)tag + FRAMEBUFFER_ADDRESS_OFFSET);
-                //mb_bootinfo.framebuffer.common.framebuffer_addr = (uint32_t)*((char *)&tag + 12);
-                width = *(uint32_t *)((char *)tag + FRAMEBUFFER_WIDTH_OFFSET);
-                height = *(uint32_t *)((char *)tag + FRAMEBUFFER_HEIGHT_OFFSET);
-                bits_per_pixel = *(uint32_t *)((char *)tag + FRAMEBUFFER_BITSPERPIXEL_OFFSET);
-                bytes_per_pixel = bits_per_pixel/8;
-                for(int col = 0; col < width; col++){
-                    for(int row=0; row<height; row++){
-                    *(framebuffer + row*col*bytes_per_pixel) = 0xFF;
-                    }
-                }
-                return;
-            }
-            else{
-                *framebuffer = 0xDEADBEEF;
+            switch (tag->type){
+                case (MULTIBOOT_TAG_TYPE_FRAMEBUFFER): 
+                    struct multiboot_tag_framebuffer * framebuffer_info = (struct multiboot_tag_framebuffer *) tag;
+                    initialize_framebuffer_attributes(framebuffer_info);
+                    break;
             }
         }
+}
+
+static void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info){
+    framebuffer.starting_address = framebuffer_info->common.framebuffer_addr;
+    framebuffer.width = framebuffer_info->common.framebuffer_width;
+    framebuffer.height = framebuffer_info->common.framebuffer_height;
+
+    framebuffer.pixel.total_bits = framebuffer_info->common.framebuffer_bpp;
+    framebuffer.pixel.num_red_bits = framebuffer_info->framebuffer_red_mask_size;
+    framebuffer.pixel.red_bits_index = framebuffer_info->framebuffer_red_field_position;
+    framebuffer.pixel.num_green_bits = framebuffer_info->framebuffer_green_mask_size;
+    framebuffer.pixel.green_bits_index = framebuffer_info->framebuffer_green_field_position;
+    framebuffer.pixel.num_blue_bits = framebuffer_info->framebuffer_blue_mask_size;
+    framebuffer.pixel.blue_bits_index = framebuffer_info->framebuffer_blue_field_position;
+
 }
 
 void kernel_start(void){
