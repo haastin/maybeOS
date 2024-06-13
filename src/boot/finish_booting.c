@@ -1,7 +1,7 @@
 #include "gdt.h"
 #include <stdint.h>
 #include "multiboot2.h"
-#include "lib/string.h"
+#include "include/string.h"
 #include "VGA_driver.h"
 
 #define NUM_GDT_ENTRIES 3
@@ -13,6 +13,8 @@
 struct segment_descriptor gdt[NUM_GDT_ENTRIES];
 
 extern struct multiboot_bootinfo mb_bootinfo;
+
+static void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info);
 
 static void init_gdt(void){
 
@@ -67,7 +69,7 @@ static void store_multiboot2_bootinfo(void){
 }
 
 static void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info){
-    framebuffer.starting_address = framebuffer_info->common.framebuffer_addr;
+    framebuffer.starting_address = (uint8_t *)(uint32_t)framebuffer_info->common.framebuffer_addr;
     framebuffer.width = framebuffer_info->common.framebuffer_width;
     framebuffer.height = framebuffer_info->common.framebuffer_height;
 
