@@ -14,8 +14,6 @@ struct segment_descriptor gdt[NUM_GDT_ENTRIES];
 
 extern struct multiboot_bootinfo mb_bootinfo;
 
-static void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info);
-
 static void init_gdt(void){
 
     //our null descriptor
@@ -66,28 +64,15 @@ static void store_multiboot2_bootinfo(void){
                     break;
             }
         }
-}
-
-static void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info){
-    framebuffer.starting_address = (uint8_t *)(uint32_t)framebuffer_info->common.framebuffer_addr;
-    framebuffer.width = framebuffer_info->common.framebuffer_width;
-    framebuffer.height = framebuffer_info->common.framebuffer_height;
-
-    framebuffer.pixel.total_bits = framebuffer_info->common.framebuffer_bpp;
-    framebuffer.pixel.num_red_bits = framebuffer_info->framebuffer_red_mask_size;
-    framebuffer.pixel.red_bits_index = framebuffer_info->framebuffer_red_field_position;
-    framebuffer.pixel.num_green_bits = framebuffer_info->framebuffer_green_mask_size;
-    framebuffer.pixel.green_bits_index = framebuffer_info->framebuffer_green_field_position;
-    framebuffer.pixel.num_blue_bits = framebuffer_info->framebuffer_blue_mask_size;
-    framebuffer.pixel.blue_bits_index = framebuffer_info->framebuffer_blue_field_position;
-
-}
+}  
 
 void kernel_start(void){
     
     init_gdt();
     
     store_multiboot2_bootinfo();
+
+    print();
    
     return;
 }

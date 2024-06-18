@@ -1,5 +1,5 @@
 #include <stdint.h>
-
+#include "multiboot2.h"
 struct Framebuffer{
     uint8_t * starting_address;
     uint32_t width;
@@ -17,5 +17,6 @@ struct Framebuffer{
 
 extern struct Framebuffer framebuffer;
 
+void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info); 
 
 void print(void);

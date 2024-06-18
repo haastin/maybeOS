@@ -11,8 +11,9 @@
 CC = i686-elf-gcc 
 AS = i686-elf-as
 
-CFLAGS := -ffreestanding -Wall -Wextra -Werror -O2 -Isrc
-LDFLAGS := -T linker.ld -ffreestanding -O2 -nostdlib -lgcc
+CLI_FLAGS ?= -O2
+CFLAGS := -ffreestanding -Wall -Wextra  -Isrc $(CLI_FLAGS) #-Werror
+LDFLAGS := -T linker.ld -ffreestanding -nostdlib -lgcc $(CLI_FLAGS)
 
 VPATH := src/boot src/include
 SRCDIR := src
@@ -20,7 +21,7 @@ BUILDDIR := build
 
 SOURCES := $(shell find $(SRCDIR) -type f -name '*.c')
 ASSEMBLY := $(shell find $(SRCDIR) -type f -name '*.S')
-OBJECTS := $(patsubst %.c,$(BUILDDIR)/%.o,$(notdir $(SOURCES))) $(patsubst %.S,$(BUILDDIR)/%.o,$(notdir $(ASSEMBLY)))  
+OBJECTS := $(patsubst %.c,$(BUILDDIR)/%.o,$(notdir $(SOURCES))) $(patsubst %.S,$(BUILDDIR)/%.o,$(notdir $(ASSEMBLY))) $(shell find $(SRCDIR) -type f -name '*.o')
 
 TARGET := bin/maybeOS.elf
 
