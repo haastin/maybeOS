@@ -15,7 +15,7 @@ CLI_FLAGS ?= -O2
 CFLAGS := -ffreestanding -Wall -Wextra  -Isrc $(CLI_FLAGS) #-Werror
 LDFLAGS := -T linker.ld -ffreestanding -nostdlib -lgcc $(CLI_FLAGS)
 
-VPATH := src/boot src/include
+VPATH := src/boot src/include src/drivers src/drivers/keyboard
 SRCDIR := src
 BUILDDIR := build
 
@@ -55,4 +55,4 @@ build/%.o: %.S
 # 	$(AS) $*.i -o $@ 
 
 clean:
-	rm -rf $(BUILDDIR)/*.o $(TARGET)
+	rm -rf $(BUILDDIR)/*.o $(BUILDDIR)/*.i $(TARGET)

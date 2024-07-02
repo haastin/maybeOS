@@ -11,3 +11,50 @@ void * memcpy(void* dest_buffer, const void* src_buffer, size_t num_bytes_to_cop
 
     return dest_buffer;
 }
+
+char * strcpy(char* restrict s1, const char* restrict s2){
+
+}
+
+char * strncpy(char * restrict s1, const char* restrict s2, size_t n){
+
+    for(size_t c=0; c<n; c++){
+        if(s2[c] =='\0'){
+            memset(s1 + c, '\0', n-c);
+            break;
+        }
+        else{
+            s1[c] = s2[c];
+        }
+    }
+    return s1;
+}
+
+//comparison section of ISO C defintion of string.h
+
+int strcmp(const char* s1, const char* s2){
+    
+    while(*s1 != '\0' && *s2 != '\0'){
+        
+        if (*s1 != *s2){
+            return *s1 > *s2 ? 1 : -1;
+        }
+        s1++;
+        s2++;
+    }
+    if (*s1 == '\0' && *s2 == '\0') {
+        return 0;
+    } else if (*s1 == '\0') {
+        return -1;
+    } else {
+        return 1;
+    }
+}
+
+void * memset(void* buff, int c, size_t n){
+    unsigned char *buff_ptr = (unsigned char*) buff;
+    for(size_t i=0; i<n; i++){
+        buff_ptr[i] = (unsigned char) c;
+    }
+    return buff;
+}

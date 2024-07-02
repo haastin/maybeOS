@@ -10,32 +10,10 @@ typedef enum display_mode{
     GRAPHICS_MODE
 } DisplayMode;
 
-//assumes R G B have 0, 1, and 2 byte indices, respectively
-typedef enum {
-    BLACK       = 0x000000, // 0x00 (R) 0x00 (G) 0x00 (B)
-    WHITE       = 0xFFFFFF, // 0xFF (R) 0xFF (G) 0xFF (B)
-    RED         = 0xFF0000, // 0xFF (R) 0x00 (G) 0x00 (B)
-    GREEN       = 0x00FF00, // 0x00 (R) 0xFF (G) 0x00 (B)
-    BLUE        = 0x0000FF, // 0x00 (R) 0x00 (G) 0xFF (B)
-    YELLOW      = 0xFFFF00, // 0xFF (R) 0xFF (G) 0x00 (B)
-    MAGENTA     = 0xFF00FF, // 0xFF (R) 0x00 (G) 0xFF (B)
-    CYAN        = 0x00FFFF, // 0x00 (R) 0xFF (G) 0xFF (B)
-    GRAY        = 0x808080, // 0x80 (R) 0x80 (G) 0x80 (B)
-    MAROON      = 0x800000, // 0x80 (R) 0x00 (G) 0x00 (B)
-    OLIVE       = 0x808000, // 0x80 (R) 0x80 (G) 0x00 (B)
-    DARK_GREEN  = 0x008000, // 0x00 (R) 0x80 (G) 0x00 (B)
-    PURPLE      = 0x800080, // 0x80 (R) 0x00 (G) 0x80 (B)
-    TEAL        = 0x008080, // 0x00 (R) 0x80 (G) 0x80 (B)
-    NAVY        = 0x000080, // 0x00 (R) 0x00 (G) 0x80 (B)
-    SILVER      = 0xC0C0C0,  // 0xC0 (R) 0xC0 (G) 0xC0 (B)
 
-    RED_INDEX = 16,
-    GREEN_INDEX = 8,
-    BLUE_INDEX = 0
-} Color;
-
-/*hash map that maps font names to PSF * ? 
-need to implement/find a freestanding hashmap implementation and implement malloc*/
+#define RED_INDEX 16
+#define GREEN_INDEX 8
+#define BLUE_INDEX 0
 
 DisplayMode display_mode;
 
@@ -67,6 +45,28 @@ static inline void set_display_mode(DisplayMode mode){
     display_mode = mode;
 }
 
+bool isCharBit(unsigned char* char_bitmap, unsigned char bits_shifted){
+
+    //by shifting the glyph pointer we can have a font width or height larger than the bit size of the underlying platform
+    unsigned char bytes_shifted = bits_shifted/8;
+    char_bitmap += bytes_shifted;
+    bits_shifted %= 8;
+
+     //isolate the MSB of the bitmap since that is our current bit 
+    unsigned char adjusted_bitmap = (*char_bitmap << bits_shifted);
+    return (adjusted_bitmap & (1 << (curr_font.width-1))) ? true : false;
+}
+
+void set_pixel_RGB(uint8_t * pixel_address, Color pixel_color){
+    unsigned char curr_pixel_red = ((pixel_color >> RED_INDEX) & 0xFF);
+    unsigned char curr_pixel_green = ((pixel_color >> BLUE_INDEX) & 0xFF);
+    unsigned char curr_pixel_blue = ((pixel_color >> GREEN_INDEX) & 0xFF);
+
+    *(pixel_address + framebuffer.pixel.red_bits_index/8) = curr_pixel_red;
+    *(pixel_address + framebuffer.pixel.blue_bits_index/8) = curr_pixel_green;
+    *(pixel_address + framebuffer.pixel.green_bits_index/8) = curr_pixel_blue;
+}
+
 void terminal_putchar(uint32_t unicode_character_index, Color char_color, Color background_color){
 
     //the bitmap for the char index passed
@@ -75,75 +75,48 @@ void terminal_putchar(uint32_t unicode_character_index, Color char_color, Color 
     //indicates which bit in the bitmap we are on
     unsigned char shift_counter = 0;
     
-    //we preserve the starting location of our cursor pointer x and y
-    uint32_t starting_cursorx = cursor_x;
-    uint32_t starting_cursory = cursor_y;
-    uint8_t* starting_address = framebuffer.starting_address + (framebuffer.width*cursor_y + cursor_x)*framebuffer.pixel.total_bits/8;
+    uint8_t* framebuffer_starting_address = framebuffer.starting_address + (framebuffer.width*cursor_y + cursor_x)*framebuffer.pixel.total_bits/8;
     
     for(size_t char_y = 0; char_y < curr_font.height; char_y++){
         for(size_t char_x = 0; char_x < curr_font.width; char_x++){
-
-            unsigned char bytes_shifted = shift_counter/8;
-            char_glyph += bytes_shifted;
-            shift_counter %= 8;
-           //isolate the MSB of the bitmap since that is our current bit 
-            unsigned char adjusted_bitmap = (*char_glyph << shift_counter);          
-            unsigned char curr_bit_val = (adjusted_bitmap & (1 << 7));
-            bool isChar = curr_bit_val ? true : false;
             
-            uint8_t* curr_pixel_address = starting_address + (framebuffer.width*char_y + char_x)*framebuffer.pixel.total_bits/8;
-
-            char curr_pixel_red;
-            char curr_pixel_green;
-            char curr_pixel_blue;
-            if(curr_bit_val == 1){
-                isChar = true;
+            //increment a copy of the framebuffer address; the real one will be adjusted later 
+            uint8_t* curr_pixel_address = framebuffer_starting_address + (framebuffer.width*char_y + char_x)*framebuffer.pixel.total_bits/8;
+            
+            if(char_color == DONT_SET){
+                //used to not 
+                set_pixel_RGB(curr_pixel_address, background_color);
             }
-           
-            if (isChar){
-                curr_pixel_red = ((char_color >> RED_INDEX) & 0xFF);
-                curr_pixel_green = ((char_color >> BLUE_INDEX) & 0xFF);
-                curr_pixel_blue = ((char_color >> GREEN_INDEX) & 0xFF);
+            else if(background_color  == DONT_SET){
+                set_pixel_RGB(curr_pixel_address, char_color);
             }
             else{
-                curr_pixel_red = ((background_color >> RED_INDEX) & 0xFF);
-                curr_pixel_green = ((background_color >> BLUE_INDEX) & 0xFF);
-                curr_pixel_blue = ((background_color >> GREEN_INDEX) & 0xFF);
+                Color desired_color = isCharBit(char_glyph, shift_counter) ? char_color : background_color;
+                set_pixel_RGB(curr_pixel_address, desired_color);
             }
             
-            *(curr_pixel_address + framebuffer.pixel.red_bits_index/8) = curr_pixel_red;
-            *(curr_pixel_address + framebuffer.pixel.blue_bits_index/8) = curr_pixel_green;
-            *(curr_pixel_address + framebuffer.pixel.green_bits_index/8) = curr_pixel_blue;
-
             shift_counter++;
         }
     }
-    cursor_x += curr_font.width;
+    update_cursor_positions();
 }
 
 /*Always assumes only a single character has been written*/
 static void update_cursor_positions(void){
 
-     if(right_boundary_x - cursor_x < curr_font.width){
+    if(right_boundary_x - cursor_x < curr_font.width){
         cursor_x = left_boundary_x;
-        if(cursor_y == bottom_boundary_y){
-           //move screen up
+        if(bottom_boundary_y- cursor_y < curr_font.height){
+           //move screen up a line
         }
         else{
-            cursor_y++;
+            cursor_y += curr_font.height;
         }
     }
     else{
         cursor_x += curr_font.width;
     }
 }
-
-// static inline bool need_newline_to_write(unsigned int num_chars_to_write){
-//     if(right_boundary_x - cursor_x < num_chars_to_write*curr_psf_font_file->font_width){
-//         return true;
-//     }
-//     return false;
-// }
 
 void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info){
     framebuffer.starting_address = (uint8_t *)(uint32_t)framebuffer_info->common.framebuffer_addr;
@@ -175,18 +148,20 @@ void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * frameb
     set_font(DEFAULT_FONT);
 }
 
+void set_background_color(Color background){
+    
+    for(size_t x = 0; x < framebuffer.width; x++){
+        for(size_t y=0; y< framebuffer.height; y++){
+            uint8_t* fb_curraddy = framebuffer.starting_address + (framebuffer.width*y + x)*framebuffer.pixel.total_bits/8;
+            set_pixel_RGB(fb_curraddy, background);
+            }
+    }
+}
 
 void print(void){
-    unsigned char test_letter = 'a';
-    //terminal_putchar(test_letter, PURPLE, OLIVE);
-    //terminal_putchar(55, RED, TEAL);
-    for(size_t x = 0; x < 5; x++){
-        terminal_putchar(48, PURPLE, TEAL);
-        for(size_t y=0; y< framebuffer.height; y++){
-            
-            //*(framebuffer.starting_address + (y*framebuffer.width + x)*3 + framebuffer.pixel.green_bits_index/8) = 0xFF;
-            }
-        }
+    set_background_color(MAROON);
+    terminal_putchar("z", PURPLE, OLIVE);
+    
 }
 
 //decide which font you want to use
