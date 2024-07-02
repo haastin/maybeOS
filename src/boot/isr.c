@@ -1,6 +1,10 @@
 #include "VGA_driver.h"
 #include <stddef.h>
 
+#define DIVIDE_ERROR 0
+#define DOUBLE_FAULT 8
+#define GENERAL_PROTECTION_EXCEPTION 13
+
 struct process_context_t {
 
     unsigned int vector_num;
@@ -31,11 +35,18 @@ static void vector_0_handler(){
 void interrupt_handler_dispatcher(struct process_context_t * process_frame){
     
     switch(process_frame->vector_num){
-        case 0:
+        case DIVIDE_ERROR:
             vector_0_handler();
             break;
+        case DOUBLE_FAULT:
+            set_background_color(GREEN);
+            break;
+        case GENERAL_PROTECTION_EXCEPTION:
+            set_background_color(PURPLE);
         case 33:
             set_background_color(YELLOW);
+            break;
+
         
     }
 }

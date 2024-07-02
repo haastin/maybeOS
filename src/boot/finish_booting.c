@@ -8,8 +8,6 @@
 #include "apic.h"
 
 #define NUM_GDT_ENTRIES 3
-#define KERNEL_CODE_SEG_GDT_INDEX 1
-#define KERNEL_DATA_SEG_GDT_INDEX 2
 
 #define NUM_SUPPORTED_INTERRUPTS 256
 #define INTERRUPT_GATE_SIZE 8
@@ -44,7 +42,7 @@ static void init_gdt(void){
     build_segment_descriptor(&gdt[KERNEL_CODE_SEG_GDT_INDEX], 0x0, 0xFFFFF, flag_lowbits, flag_highbits); 
 
     //our kernel data segment
-    flag_lowbits = 0 | PROCESS_SEGMENT | KERNEL_SEGMENT | SEGMENT_IS_IN_MEMORY | DATA_SEGMENT | EXPAND_DOWN | 
+    flag_lowbits = 0 | PROCESS_SEGMENT | KERNEL_SEGMENT | SEGMENT_IS_IN_MEMORY | DATA_SEGMENT | EXPAND_UP | 
     WRITABLE | NOT_ACCESSED;
     flag_highbits = 0 | NATIVELY_32BIT | AVAILBLE_FLAG_NOT_USED | ON_32BIT_PLATFORM | 
     EXTENDED_SEGMENT_LIMIT;
@@ -55,13 +53,24 @@ static void init_gdt(void){
     gdt_reg_info.limit = sizeof(struct segment_descriptor)*NUM_GDT_ENTRIES -1;
 
     asm volatile ("lgdt %0" : : "m" (gdt_reg_info));
+
+    /**need to flush our current seg regs to make sure that they point to valid segment descriptors and to clear their cached values. 0x10 is the segment selector for the kernel data segment, and the cs reg can be set automatically by the cpu by doing a far jump, which is the jmp command */
+    asm volatile ("mov $0x10, %eax\n"
+                "mov %eax, %ds\n"
+                "mov %eax, %ss\n"
+                "mov %eax, %es\n"
+                "mov %eax, %fs\n"
+                "mov %eax, %gs\n"
+                "jmp $0x8,$.continue\n"
+                ".continue:"
+                );
 }
 
 static void init_idt(void){
-    uint8_t flags = INTERRUPT_GATE_BASE_FLAG_VALS | GATE_DESC_IS_32BIT | KERNEL_SEG | PRESENT_IN_MEMORY;
     extern uint32_t arch_defined_interrupts_start;
     for(size_t interrupt_vector = 0; interrupt_vector < 32; interrupt_vector++){
-        build_gate_descriptor(&idt[interrupt_vector], arch_defined_interrupts_start + (interrupt_vector*16), KERNEL_CODE_SEG_GDT_INDEX, flags);
+        uint32_t interr_handler_addy = &arch_defined_interrupts_start + (interrupt_vector*16);
+        build_interrupt_gate_descriptor(&idt[interrupt_vector], interr_handler_addy, KERNEL_CODE_SEG_SELECTOR, GATE_DESC_IS_32BIT, KERNEL_SEG, PRESENT_IN_MEMORY);
     }
 
     struct idt_register_data_32bit idtr;
@@ -110,7 +119,7 @@ void kernel_start(void){
     store_multiboot2_bootinfo();
 
     print();
-
+    
     asm volatile("mov $1, %%eax\n"
                 "xor %%edx, %%edx\n"
                 "mov $0, %%ebx\n"

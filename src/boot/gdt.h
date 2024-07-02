@@ -22,7 +22,10 @@ struct gdt_register_data{
 
 /*no global structure for a GDT because it is up to the end user how many
 segment desciptors they want in it, so we'll leave that for a different file*/
+#define KERNEL_CODE_SEG_GDT_INDEX 1
+#define KERNEL_DATA_SEG_GDT_INDEX 2
 
+#define KERNEL_CODE_SEG_SELECTOR 0x8
 
 /*we define some constants and macros to implement the flags portion
 of a GDT descriptor to improve readability*/
@@ -81,7 +84,7 @@ of a GDT descriptor to improve readability*/
 
 //bit 1 in Type field
 #define NOT_WRITABLE (0 << 1)
-#define WRITABLE (0 << 1)
+#define WRITABLE (1 << 1)
 
 //remaining type field bits for a code segment
 

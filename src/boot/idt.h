@@ -7,7 +7,11 @@ struct gate_descriptor_32bit{
     uint16_t offset_low;
     uint16_t segment_selector;
     uint8_t unused;
-    uint8_t flags;
+    unsigned int gate_type : 3;
+    unsigned int gate_bitmode : 1;
+    unsigned int zero : 1;
+    unsigned int desc_priv_level : 2;
+    unsigned int seg_present : 1;
     uint16_t offset_high;
 } __attribute__((packed));
 
@@ -16,20 +20,18 @@ struct idt_register_data_32bit{
     uint32_t base_address;
 } __attribute__((packed));
 
-#define KERNEL_SEG (0 << 6)
-#define USER_SEG (3 << 6)
+#define KERNEL_SEG 0 
+#define USER_SEG 3
 
-#define PRESENT_IN_MEMORY 1
-#define NOT_PRESENT_IN_MEMORY 0
+#define PRESENT_IN_MEMORY 1 
+#define NOT_PRESENT_IN_MEMORY 0 
 
-#define INTERRUPT_GATE_BASE_FLAG_VALS 6
-#define TRAP_GATE_BASE_FLAG_VALS 7
+#define GATE_DESC_IS_32BIT 1
+#define GATE_DESC_IS_16BIT 0
 
-#define GATE_DESC_IS_32BIT (1 << 3)
-#define GATE_DESC_IS_16BIT (0 << 3)
-
-void build_gate_descriptor(struct gate_descriptor_32bit * gate_desc, uint32_t base_address, uint16_t segment_selector, uint8_t flags);
-
+void build_interrupt_gate_descriptor(struct gate_descriptor_32bit *gate_desc, uint32_t base_address, uint16_t segment_selector, unsigned char bit_mode, unsigned char desc_priv_level, unsigned char seg_present);
 
 
 #endif/* __IDT_H__*/
+
+

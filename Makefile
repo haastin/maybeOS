@@ -12,7 +12,7 @@ CC = i686-elf-gcc
 AS = i686-elf-as
 
 CLI_FLAGS ?= -O2
-CFLAGS := -ffreestanding -Wall -Wextra  -Isrc $(CLI_FLAGS) #-Werror
+CFLAGS := -ffreestanding -Wall -Wextra -Isrc -O0 $(CLI_FLAGS) #-Werror
 LDFLAGS := -T linker.ld -ffreestanding -nostdlib -lgcc $(CLI_FLAGS)
 
 VPATH := src/boot src/include src/drivers src/drivers/keyboard
