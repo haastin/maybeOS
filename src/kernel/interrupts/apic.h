@@ -111,6 +111,6 @@ extern uint32_t* lapic_base_address;
 void process_acpi_info( struct multiboot_tag_new_acpi * acpi_info_tag);
 
 //used in my interrupt handlers
-void write_EOI(uint32_t val);
+void write_EOI();
 
 #endif /*__APIC_H__*/

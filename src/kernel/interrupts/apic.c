@@ -209,9 +209,9 @@ struct IOAPIC_Descriptor * get_IOAPIC_info(struct multiboot_tag_new_acpi * acpi_
     }
 }
 
-void write_EOI(uint32_t val){
-    //cpu must write here before interrupt handler finishes to indicate CPU has started handling the interrupt
-    *(lapic_base_address + LAPIC_EOI_REG_OFFSET) = val;
+void write_EOI(){
+    //cpu must write here before interrupt handler finishes to indicate CPU has started handling the interrupt; doesnt matter what the val is
+    *(lapic_base_address + LAPIC_EOI_REG_OFFSET) = 0;
 }
 
 /**

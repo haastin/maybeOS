@@ -118,12 +118,6 @@ void kernel_start(void){
     init_idt();
     store_multiboot2_bootinfo();
 
-    print();
-    
-    asm volatile("mov $1, %%eax\n"
-                "xor %%edx, %%edx\n"
-                "mov $0, %%ebx\n"
-                "div %%ebx\n" ::);
-   
+    //print();
     return;
 }

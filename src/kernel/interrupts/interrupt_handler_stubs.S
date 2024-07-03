@@ -11,6 +11,7 @@ push %esp //the address where the process_context_t struct data begins
 call interrupt_handler_dispatcher
 popa
 add $16, %esp #get rid of the vector number and real or fake error code on the stack
+call write_EOI
 iret
  
 
