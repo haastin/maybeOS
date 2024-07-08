@@ -1,9 +1,9 @@
-#include "asm_helpers.h"
-inline void sendbyteto_ioport(int port, unsigned char data){
-    asm volatile("outb %0, %1" : :"r" (port), "r" (data));
+void sendb_toport(int port, unsigned char data){
+    asm volatile("outb %1, %0" : :"d" ((unsigned short)port), "a" (data));
 }
-inline unsigned char recvbytefrom_ioport(int port){
+
+unsigned char recvb_fromport(unsigned short port){
     unsigned char res_data = 0;
-    asm volatile("inb %0, %1" : "=r" (res_data) : "r" (port) );
+    asm volatile("inb %1, %0" : "=a" (res_data) : "d" (port) );
     return res_data;
 }

@@ -1,18 +1,25 @@
 #include "gdt.h"
 #include <stdint.h>
 #include "multiboot2.h"
-#include "include/string.h"
+#include "string.h"
 #include "VGA_driver.h"
+#include "ps2.h"
 #include "idt.h"
 #include "isr.h"
+
 #include "apic.h"
+#include "acpi.h"
+#include "lapic.h"
+
+
 
 #define NUM_GDT_ENTRIES 3
 
 #define NUM_SUPPORTED_INTERRUPTS 256
 #define INTERRUPT_GATE_SIZE 8
 
-
+#define VECTOR_X_INTERRUPT_VECTOR_HANDLER_MAX_BYTES 32
+ 
 //move this to multiboot header??
 /*size+7 increases size to the next multiple of 8, & ~7 sets the lower 3 bits to 0*/
 #define ALIGN_TO_8_BYTES(tag_size) ((tag_size + 7) & ~7)
@@ -68,8 +75,8 @@ static void init_gdt(void){
 
 static void init_idt(void){
     extern uint32_t arch_defined_interrupts_start;
-    for(size_t interrupt_vector = 0; interrupt_vector < 32; interrupt_vector++){
-        uint32_t interr_handler_addy = &arch_defined_interrupts_start + (interrupt_vector*16);
+    for(size_t interrupt_vector = 0; interrupt_vector < 256; interrupt_vector++){
+        uint32_t interr_handler_addy = ((char*)&arch_defined_interrupts_start + (interrupt_vector*VECTOR_X_INTERRUPT_VECTOR_HANDLER_MAX_BYTES));
         build_interrupt_gate_descriptor(&idt[interrupt_vector], interr_handler_addy, KERNEL_CODE_SEG_SELECTOR, GATE_DESC_IS_32BIT, KERNEL_SEG, PRESENT_IN_MEMORY);
     }
 
@@ -108,16 +115,29 @@ static void store_multiboot2_bootinfo(void){
                     
             }
         }
-}  
+}
+
+void initialize_interrupts(void){
+    initialize_lapic();
+    initialize_ioapic();
+    asm volatile("sti\n");
+    //initialize_interrupt_source_overrides();
+}
 
 void kernel_start(void){
     
-    //need to refresh the seg registers w/ their new gdt segments
     init_gdt();
-
     init_idt();
     store_multiboot2_bootinfo();
-
-    //print();
+    initialize_interrupts();
+    print();
+    initialize_ps2keyboard();
+    uint8_t res1 = readb_from_keyboard();
+    uint8_t res2 = readb_from_keyboard();
+    uint8_t res3 = readb_from_keyboard();
+    uint8_t res4 = readb_from_keyboard();
+    uint8_t res5 = readb_from_keyboard();
+    uint8_t status1= get_keyboardcontroller_status_reg();
+    asm volatile("loop2: jmp loop2\n");
     return;
 }

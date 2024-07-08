@@ -1,5 +1,5 @@
 #include "font.h"
-#include "include/string.h"
+#include "string.h"
 
 static bool is_psf1_font(void *);
 
