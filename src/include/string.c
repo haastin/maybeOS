@@ -51,10 +51,20 @@ int strcmp(const char* s1, const char* s2){
     }
 }
 
+//Functions in Misc section in ISO C
 void * memset(void* buff, int c, size_t n){
     unsigned char *buff_ptr = (unsigned char*) buff;
     for(size_t i=0; i<n; i++){
         buff_ptr[i] = (unsigned char) c;
     }
     return buff;
+}
+
+size_t strlen(const char * s){
+    size_t s_idx = 0;
+    while(s[s_idx] != '\0'){
+        s_idx++;
+    }
+    size_t res = s_idx + 1;
+    return res;
 }

@@ -1,7 +1,19 @@
 #include "font.h"
 #include "string.h"
+#include "VGA_driver.h"
 
 static bool is_psf1_font(void *);
+
+
+void set_font(Font_Name font_name){
+
+    //would prefer a hashmap here instead, we'll see
+    switch(font_name){
+        case(gr928b_8x16):
+            initialize_font(font_name, &curr_font);
+            break;
+    }
+}
 
 static inline bool is_psf1_font(void * psf_font_file){
    
@@ -32,7 +44,7 @@ void initialize_font(Font_Name font_name, Font* curr_font){
             else{
                 PSF2_FontHeader * psf2_font = (PSF2_FontHeader *) &_binary_gr928b_8x16_psfu_start;
                 memcpy(curr_font, &(psf2_font->numglyph), 16);
-                curr_font->glyph = (unsigned char *) (psf2_font + psf2_font->headersize);
+                curr_font->glyph = (unsigned char *) psf2_font + psf2_font->headersize;
                 curr_font->hasUnicodeTable = (0x1 & (psf2_font->flags));
             }
             break;

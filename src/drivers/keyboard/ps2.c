@@ -2,9 +2,10 @@
 #include "asm_helpers.h"
 #include "ps2.h"
 #include <stdbool.h>
+#include "keycodes.h"
 
 /**
- * Commands to the IO ports 
+ * Commands to the keyboard 
  */
 
 #define RESET_KEYBOARD_CMD 0xFF
@@ -12,7 +13,7 @@
 #define ENABLE_KEYBORD_SCANNING_CMD 0xF4
 
 /**
- * 
+ * Commands to the keyboard controller
  */
 
 #define KBD_CONT_SELF_TEST_CMD 0xAA
@@ -26,15 +27,122 @@
 #define INTERRUPT_PORT_2_BIT_INDEX 1
 #define TRANSLATE_SCANCODE_BIT_INDEX 6
 
-//
+/**
+ * Scancode 
+ */
+
 #define RECEIVED_SCANCODE_BUFFER_SIZE 255
+#define PS_SET2_SCANCODE_PREFIX_1 0xE0
+#define PS_SET2_SCANCODE_PREFIX_2 0xF0
+
+/**keycodes are mapped to the scancodes from keys they represent */
+static const unsigned short ps2_set2_keycode[256] = {
+    [0x1C] = KEY_A,
+    [0x32] = KEY_B,
+    [0x21] = KEY_C,
+    [0x23] = KEY_D,
+    [0x24] = KEY_E,
+    [0x2B] = KEY_F,
+    [0x34] = KEY_G,
+    [0x33] = KEY_H,
+    [0x43] = KEY_I,
+    [0x3B] = KEY_J,
+    [0x42] = KEY_K,
+    [0x4B] = KEY_L,
+    [0x3A] = KEY_M,
+    [0x31] = KEY_N,
+    [0x44] = KEY_O,
+    [0x4D] = KEY_P,
+    [0x15] = KEY_Q,
+    [0x2D] = KEY_R,
+    [0x1B] = KEY_S,
+    [0x2C] = KEY_T,
+    [0x3C] = KEY_U,
+    [0x2A] = KEY_V,
+    [0x1D] = KEY_W,
+    [0x22] = KEY_X,
+    [0x35] = KEY_Y,
+    [0x1A] = KEY_Z,
+    [0x45] = KEY_0_AND_RIGHT_PAREN,
+    [0x16] = KEY_1_AND_EXCLAMATION,
+    [0x1E] = KEY_2_AND_AT,
+    [0x26] = KEY_3_AND_HASH,
+    [0x25] = KEY_4_AND_DOLLAR,
+    [0x2E] = KEY_5_AND_PERCENT,
+    [0x36] = KEY_6_AND_CARET,
+    [0x3D] = KEY_7_AND_AMPERSAND,
+    [0x3E] = KEY_8_AND_ASTERISK,
+    [0x46] = KEY_9_AND_LEFT_PAREN,
+    [0x66] = KEY_DELETE_BACKSPACE,
+    [0x29] = KEY_SPACEBAR,
+    [0x0D] = KEY_TAB,
+    [0x58] = KEY_CAPS_LOCK,
+    [0x12] = KEY_L_SHIFT,
+    [0x14] = KEY_L_CTRL,
+    [0x1F] = KEY_L_GUI,
+    [0x11] = KEY_L_ALT, 
+    [0x59] = KEY_R_SHIFT,
+    //[0x14] = KEY_R_CTRL, same situation as alt
+    [0x27] = KEY_R_GUI,
+    //[0x11] = KEY_R_ALT, index conflict w/ R ALT, will treat both the same for now
+    //[0x2F] = KEY_APPS,
+    //[0x5A] = KEY_RETURN_ENTER, same sitch as alt
+    [0x76] = KEY_ESCAPE,
+    [0x05] = KEY_F1,
+    [0x06] = KEY_F2,
+    [0x04] = KEY_F3,
+    [0x0C] = KEY_F4,
+    [0x03] = KEY_F5,
+    [0x0B] = KEY_F6,
+    [0x83] = KEY_F7,
+    [0x0A] = KEY_F8,
+    [0x01] = KEY_F9,
+    [0x09] = KEY_F10,
+    [0x78] = KEY_F11,
+    [0x07] = KEY_F12,
+    //[0x12] = KEY_PRINT_SCREEN, has an index conflict, wont need for Mac kbd
+    [0x7E] = KEY_SCROLL_LOCK,
+    [0xE1] = KEY_PAUSE,
+    //[0x70] = KEY_INSERT,
+    //[0x6C] = KEY_HOME, dup
+    //[0x7D] = KEY_PAGE_UP, dup
+    //[0x71] = KEY_DELETE_FORWARD,
+    //[0x69] = KEY_END, index conflict- i think this is a duplicate key?
+    //[0x7A] = KEY_PAGE_DOWN, dup
+    //[0x74] = KEY_RIGHT_ARROW, dup
+    //[0x6B] = KEY_LEFT_ARROW, dup
+    //[0x72] = KEY_DOWN_ARROW, index conflict/ duplicate?
+    //[0x75] = KEY_UP_ARROW, dup
+    [0x77] = KEY_NUM_LOCK_AND_CLEAR,
+    [0x4A] = KEY_KEYPAD_SLASH,
+    [0x7C] = KEY_KEYPAD_ASTERISK,
+    [0x7B] = KEY_KEYPAD_MINUS,
+    [0x79] = KEY_KEYPAD_PLUS,
+    [0x5A] = KEY_KEYPAD_ENTER,
+    [0x69] = KEY_KEYPAD_1_AND_END,
+    [0x72] = KEY_KEYPAD_2_AND_DOWN_ARROW,
+    [0x7A] = KEY_KEYPAD_3_AND_PAGE_DOWN,
+    [0x6B] = KEY_KEYPAD_4_AND_LEFT_ARROW,
+    [0x73] = KEY_KEYPAD_5,
+    [0x74] = KEY_KEYPAD_6_AND_RIGHT_ARROW,
+    [0x6C] = KEY_KEYPAD_7_AND_HOME,
+    [0x75] = KEY_KEYPAD_8_AND_UP_ARROW,
+    [0x7D] = KEY_KEYPAD_9_AND_PAGE_UP,
+    [0x70] = KEY_KEYPAD_0_AND_INSERT,
+    [0x71] = KEY_KEYPAD_DECIMAL,
+    [0x67] = KEY_KEYPAD_EQUAL_SIGN,
+};
+
+bool futureScancodeNeedsModified = false;
 
 uint8_t scancode_buff[RECEIVED_SCANCODE_BUFFER_SIZE];
 uint8_t scancode_buff_curr_index;
 
 static inline bool out_buff_full();
 static inline bool in_buff_full();
-
+static unsigned short set2_scancode_to_keycode(uint8_t scancode);
+static bool isFullKeycode(uint8_t scancode);
+static bool modifiesFutureScancode(uint8_t scancode);
 static inline void send_kbd_controller_cmd(uint8_t cmd);
 
 unsigned char get_scancode_set_version(){
@@ -126,12 +234,6 @@ void initialize_ps2keyboard(void){
     
     reset_keyboard();
     sendb_to_keyboard(ENABLE_KEYBORD_SCANNING_CMD);
-    while(true){}
-    uint8_t status_reg_a = get_keyboardcontroller_status_reg();
-    uint8_t ctl_reg_a = read_kbd_cntl_control_reg();
-   
-    uint8_t resp1 = readb_from_keyboard();
-    uint8_t resp2 = readb_from_keyboard();
 }
 
 bool controller_self_test(void){
@@ -232,10 +334,61 @@ void enable_interrupt_ports(unsigned char avail_interfaces_code){
     write_kbd_ctl_control_reg(kbd_ctl_reg);
 }
 
+//TODO: in case I decide to store each byte of a scancode in the future
 void place_scancode_in_buff(uint8_t scancode){
     
     scancode_buff[scancode_buff_curr_index % RECEIVED_SCANCODE_BUFFER_SIZE] = scancode;
-    scancode_buff_curr_index++;
+    scancode_buff_curr_index++;   
+}
 
-    
+static void modify_scancode(uint8_t scancode){
+    //use prev buffered scancode to change this scancode, or potentially index into a special keycode table if its a complex set of keypresses ctrl + some other key, shift + some other key, etc.
+}
+
+void handle_kbd_irq(uint8_t scancode){
+
+    if(isFullKeycode(scancode)){
+        //does this scancode modify a future one?
+        if(modifiesFutureScancode(scancode)){
+            //is a ctrl, shift, caps, etc scancode
+            futureScancodeNeedsModified = true;
+            place_scancode_in_buff(scancode);
+        }
+        else{
+            //does this scancode itself need to be modified?
+            if(futureScancodeNeedsModified){
+                modify_scancode(scancode);
+            }
+
+            else{
+                unsigned short keycode = set2_scancode_to_keycode(scancode);
+                deliver_keycode(keycode);
+        }
+    }
+    }
+    else{
+        //this is a BREAK, in which case we do nothing, or a more complex make, on which case we only need the non-prefix byte to index into the keycode map
+    }
+}
+static inline unsigned short set2_scancode_to_keycode(uint8_t scancode){
+    unsigned short res_keycode = ps2_set2_keycode[scancode];
+    return res_keycode;
+}
+
+void deliver_keycode(unsigned short scancode){
+    unsigned short res_keycode = set2_scancode_to_keycode(scancode);
+}
+
+static inline bool isFullKeycode(uint8_t scancode){
+    if(scancode == PS_SET2_SCANCODE_PREFIX_1 || scancode == PS_SET2_SCANCODE_PREFIX_2){
+        return false;
+    }
+    return true;
+}
+
+static bool modifiesFutureScancode(uint8_t scancode){
+    if(scancode == KEY_CAPS_LOCK || scancode == KEY_L_SHIFT || scancode == KEY_R_SHIFT || scancode == KEY_L_CTRL || scancode == KEY_L_ALT){
+        return true;
+    }
+    return false;
 }

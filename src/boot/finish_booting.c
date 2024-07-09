@@ -130,14 +130,9 @@ void kernel_start(void){
     init_idt();
     store_multiboot2_bootinfo();
     initialize_interrupts();
-    print();
     initialize_ps2keyboard();
-    uint8_t res1 = readb_from_keyboard();
-    uint8_t res2 = readb_from_keyboard();
-    uint8_t res3 = readb_from_keyboard();
-    uint8_t res4 = readb_from_keyboard();
-    uint8_t res5 = readb_from_keyboard();
-    uint8_t status1= get_keyboardcontroller_status_reg();
+    initialize_shell_UI();
+    
     asm volatile("loop2: jmp loop2\n");
     return;
 }

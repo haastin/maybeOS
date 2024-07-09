@@ -2,6 +2,7 @@
 #define __VGA_DRIVER_H__
 #include <stdint.h>
 #include "multiboot2.h"
+#include "font.h"
 
 struct Framebuffer{
     uint8_t * starting_address;
@@ -17,6 +18,7 @@ struct Framebuffer{
         uint8_t blue_bits_index;
     } pixel;
 };
+
 
 //assumes R G B have 0, 1, and 2 byte indices, respectively
 typedef enum {
@@ -39,11 +41,19 @@ typedef enum {
     DONT_SET    = -1,
 } Color;
 
+//Bit indexes of each 8bit RGB in a Color entry
+#define RED_INDEX 16
+#define GREEN_INDEX 8
+#define BLUE_INDEX 0
+
 extern struct Framebuffer framebuffer;
+extern Font curr_font;
 
 void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info); 
 
+void initialize_shell_UI(void);
 void print(void);
 void set_background_color(Color background);
 
 #endif /*__VGA_DRIVER_H__*/
+

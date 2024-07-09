@@ -43,10 +43,6 @@ static void vector_0_handler(void){
     set_background_color(BLUE);
 }
 
-static void keyboard_irq_handler(void){
-    //this is an inline asm func defined in a .h file, so we need to include its symbol here since it won't be compiled ans registered in the symbol table by default
-    unsigned char scancode = recvb_fromport(KEYBOARD_IOPORT);
-}
 
 uint32_t interrupt_handler_dispatcher(struct process_context_t * process_frame){
     
@@ -64,9 +60,8 @@ uint32_t interrupt_handler_dispatcher(struct process_context_t * process_frame){
             set_background_color(MAGENTA);
             break;
         case KEYBOARD_IRQ:
-            set_background_color(YELLOW);
             uint8_t resp1 = readb_from_keyboard();
-            place_scancode_in_buff(resp1);
+            handle_kbd_irq(resp1);
             break;
 
         

@@ -1,3 +1,6 @@
+#ifndef __FONT_H__
+#define __FONT_H__
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -6,8 +9,11 @@ ends up being a symbol that is an array of this data*/
 extern char _binary_gr928b_8x16_psfu_start[];
 extern char _binary_gr928b_8x16_psfu_end[];
 
-
 #define PSF1_FONT_MAGIC 0x0436
+#define PSF2_FONT_MAGIC 0x864ab572
+
+#define DEFAULT_FONT gr928b_8x16
+
 
 //PSF1 glyphs are always 8 bits wide
 typedef struct {
@@ -15,9 +21,6 @@ typedef struct {
     uint8_t fontMode; // PSF font mode.
     uint8_t bytesperglyph; // PSF character size.
 } PSF1_FontHeader;
- 
- 
-#define PSF2_FONT_MAGIC 0x864ab572
  
 typedef struct {
     uint32_t magic;         /* magic bytes to identify PSF */
@@ -45,3 +48,6 @@ typedef struct{
 } Font;
 
 void initialize_font(Font_Name, Font*);
+void set_font(Font_Name font_name);
+
+#endif /*__FONT_H__*/

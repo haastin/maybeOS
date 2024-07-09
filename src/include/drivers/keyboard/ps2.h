@@ -43,4 +43,6 @@ static void write_kbd_ctl_control_reg(uint8_t new_control_reg_val);
 bool ps2_contoller_has_multiple_ports(void);
 unsigned char test_kbd_cont_interfaces(bool multiple_interfaces);
 void place_scancode_in_buff(uint8_t scancode);
+
+
 void send_kbd_controller_cmd_with_param(uint8_t cmd, uint8_t parameter);
