@@ -31,9 +31,6 @@
  * Scancode 
  */
 
-#define RECEIVED_SCANCODE_BUFFER_SIZE 255
-#define PS_SET2_SCANCODE_PREFIX_1 0xE0
-#define PS_SET2_SCANCODE_PREFIX_2 0xF0
 
 /**keycodes are mapped to the scancodes from keys they represent */
 static const unsigned short ps2_set2_keycode[256] = {
@@ -74,19 +71,24 @@ static const unsigned short ps2_set2_keycode[256] = {
     [0x3E] = KEY_8_AND_ASTERISK,
     [0x46] = KEY_9_AND_LEFT_PAREN,
     [0x66] = KEY_DELETE_BACKSPACE,
+
+    //TODO: add other keys here that are missing, like colon/semicolon, quote/apostrophe, etc
+
     [0x29] = KEY_SPACEBAR,
+
+    //on 2020 Mac, left side
     [0x0D] = KEY_TAB,
     [0x58] = KEY_CAPS_LOCK,
     [0x12] = KEY_L_SHIFT,
     [0x14] = KEY_L_CTRL,
     [0x1F] = KEY_L_GUI,
     [0x11] = KEY_L_ALT, 
+
+    //on 2020 Mac, right side
     [0x59] = KEY_R_SHIFT,
-    //[0x14] = KEY_R_CTRL, same situation as alt
+    
     [0x27] = KEY_R_GUI,
-    //[0x11] = KEY_R_ALT, index conflict w/ R ALT, will treat both the same for now
-    //[0x2F] = KEY_APPS,
-    //[0x5A] = KEY_RETURN_ENTER, same sitch as alt
+    
     [0x76] = KEY_ESCAPE,
     [0x05] = KEY_F1,
     [0x06] = KEY_F2,
@@ -100,19 +102,10 @@ static const unsigned short ps2_set2_keycode[256] = {
     [0x09] = KEY_F10,
     [0x78] = KEY_F11,
     [0x07] = KEY_F12,
-    //[0x12] = KEY_PRINT_SCREEN, has an index conflict, wont need for Mac kbd
+    //[0x12] = KEY_PRINT_SCREEN, can't handle this key w/ my driver logic
     [0x7E] = KEY_SCROLL_LOCK,
     [0xE1] = KEY_PAUSE,
-    //[0x70] = KEY_INSERT,
-    //[0x6C] = KEY_HOME, dup
-    //[0x7D] = KEY_PAGE_UP, dup
-    //[0x71] = KEY_DELETE_FORWARD,
-    //[0x69] = KEY_END, index conflict- i think this is a duplicate key?
-    //[0x7A] = KEY_PAGE_DOWN, dup
-    //[0x74] = KEY_RIGHT_ARROW, dup
-    //[0x6B] = KEY_LEFT_ARROW, dup
-    //[0x72] = KEY_DOWN_ARROW, index conflict/ duplicate?
-    //[0x75] = KEY_UP_ARROW, dup
+    
     [0x77] = KEY_NUM_LOCK_AND_CLEAR,
     [0x4A] = KEY_KEYPAD_SLASH,
     [0x7C] = KEY_KEYPAD_ASTERISK,
@@ -133,20 +126,51 @@ static const unsigned short ps2_set2_keycode[256] = {
     [0x67] = KEY_KEYPAD_EQUAL_SIGN,
 };
 
-bool futureScancodeNeedsModified = false;
+/**
+ * Index into this table when a makecode prefix is detected
+ * *size of 0x80 is specified since highest scancode index val goes into 0x70s, so this save space instead of just specifying 0xff. hashmap would still be better.
+ */
+static const unsigned short ps2_set2_prefixed_keycodes[0x80]= {
+    [0x14] = KEY_R_CTRL, 
+    [0x11] = KEY_R_ALT, 
+    //[0x2F] = KEY_APPS,
+    [0x5A] = KEY_RETURN_ENTER, 
+    [0x70] = KEY_INSERT,
+    [0x6C] = KEY_HOME, 
+    [0x7D] = KEY_PAGE_UP, 
+    [0x71] = KEY_DELETE_FORWARD,
+    [0x69] = KEY_END, 
+    [0x7A] = KEY_PAGE_DOWN, 
+    [0x74] = KEY_RIGHT_ARROW, 
+    [0x6B] = KEY_LEFT_ARROW, 
+    [0x72] = KEY_DOWN_ARROW, 
+    [0x75] = KEY_UP_ARROW, 
+};
 
-uint8_t scancode_buff[RECEIVED_SCANCODE_BUFFER_SIZE];
-uint8_t scancode_buff_curr_index;
+//will not buffer any scancodes, will handle them immediately. if its a multibyte scancode with prefixes, we kepe track of them with these toggled states
+static bool bufferedPrefix;
+static bool bufferedBreakCodePrefix;
+
+#define PS_SET2_SCANCODE_PREFIX_1 0xE0
+#define PS_SET2_SCANCODE_PREFIX_2 0xF0
+
+//not buffering any scancodes for now 
+// uint8_t scancode_buff[RECEIVED_SCANCODE_BUFFER_SIZE];
+// uint8_t scancode_buff_curr_index;
 
 static inline bool out_buff_full();
 static inline bool in_buff_full();
 static unsigned short set2_scancode_to_keycode(uint8_t scancode);
-static bool isFullKeycode(uint8_t scancode);
+void deliver_keycode(unsigned short scancode);
+static bool isCompleteKeycode(uint8_t scancode);
+static bool isUtilityKeycode(unsigned short keycode, uint8_t scancode);
+static void handle_utility_keycode(uint8_t scancode);
+static bool isBreakCode(uint8_t scancode);
 static bool modifiesFutureScancode(uint8_t scancode);
 static inline void send_kbd_controller_cmd(uint8_t cmd);
 
 unsigned char get_scancode_set_version(){
-    return 1;
+    return 2;
 }
 
 uint8_t * clear_input_buffer(void){
@@ -209,7 +233,7 @@ static inline void disable_ps2devices(){
 }
 
 void initialize_ps2keyboard(void){
-    scancode_buff_curr_index = 0;
+   
     disable_ps2devices(); //make sure nothing can be sent to the kbd cont
     readb_from_keyboard(); //flush the kbd cont input buffer
     initialize_kbd_control_reg();
@@ -335,60 +359,78 @@ void enable_interrupt_ports(unsigned char avail_interfaces_code){
 }
 
 //TODO: in case I decide to store each byte of a scancode in the future
-void place_scancode_in_buff(uint8_t scancode){
+// void place_scancode_in_buff(uint8_t scancode){
     
-    scancode_buff[scancode_buff_curr_index % RECEIVED_SCANCODE_BUFFER_SIZE] = scancode;
-    scancode_buff_curr_index++;   
-}
-
-static void modify_scancode(uint8_t scancode){
-    //use prev buffered scancode to change this scancode, or potentially index into a special keycode table if its a complex set of keypresses ctrl + some other key, shift + some other key, etc.
-}
+//     scancode_buff[scancode_buff_curr_index % RECEIVED_SCANCODE_BUFFER_SIZE] = scancode;
+//     scancode_buff_curr_index++;   
+// }
 
 void handle_kbd_irq(uint8_t scancode){
 
-    if(isFullKeycode(scancode)){
-        //does this scancode modify a future one?
-        if(modifiesFutureScancode(scancode)){
-            //is a ctrl, shift, caps, etc scancode
-            futureScancodeNeedsModified = true;
-            place_scancode_in_buff(scancode);
+    unsigned short keycode = set2_scancode_to_keycode(scancode);
+
+    //scancode is meant for the driver
+    if(isUtilityKeycode(keycode, scancode)){
+        handle_utility_keycode(keycode);
+    }
+    //a multibyte scancode
+    else if(!isCompleteKeycode(scancode)){
+        if(isBreakCode(scancode)){
+            bufferedBreakCodePrefix = true;
         }
         else{
-            //does this scancode itself need to be modified?
-            if(futureScancodeNeedsModified){
-                modify_scancode(scancode);
-            }
-
-            else{
-                unsigned short keycode = set2_scancode_to_keycode(scancode);
-                deliver_keycode(keycode);
+            bufferedPrefix = true;
         }
     }
-    }
     else{
-        //this is a BREAK, in which case we do nothing, or a more complex make, on which case we only need the non-prefix byte to index into the keycode map
+        bufferedBreakCodePrefix = false;
+        bufferedPrefix = false;
+
+        if(bufferedBreakCodePrefix){
+            //do nothing for a break code
+        }
+        else{
+            deliver_keycode(keycode);
+        }
     }
 }
+
 static inline unsigned short set2_scancode_to_keycode(uint8_t scancode){
-    unsigned short res_keycode = ps2_set2_keycode[scancode];
+    unsigned short res_keycode;
+    if(bufferedPrefix){
+        res_keycode = ps2_set2_prefixed_keycodes[scancode];
+    }
+    else{
+        res_keycode = ps2_set2_keycode[scancode];
+    }
+   
     return res_keycode;
 }
 
 void deliver_keycode(unsigned short scancode){
-    unsigned short res_keycode = set2_scancode_to_keycode(scancode);
+    
 }
 
-static inline bool isFullKeycode(uint8_t scancode){
+
+/**
+ * * This func works for every key besides print screen (ie all other keys end after one of the two prefixes)
+ */
+static inline bool isCompleteKeycode(uint8_t scancode){
     if(scancode == PS_SET2_SCANCODE_PREFIX_1 || scancode == PS_SET2_SCANCODE_PREFIX_2){
         return false;
     }
     return true;
 }
 
-static bool modifiesFutureScancode(uint8_t scancode){
-    if(scancode == KEY_CAPS_LOCK || scancode == KEY_L_SHIFT || scancode == KEY_R_SHIFT || scancode == KEY_L_CTRL || scancode == KEY_L_ALT){
-        return true;
-    }
+static bool isUtilityKeycode(unsigned short keycode, uint8_t scancode){
+    //if scancode val corresponds to ack, echo, etc.
     return false;
+}
+
+static void handle_utility_keycode(uint8_t scancode){
+    return;
+}
+
+static inline bool isBreakCode(uint8_t scancode){
+    return scancode == PS_SET2_SCANCODE_PREFIX_2 ? true : false;
 }

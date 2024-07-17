@@ -3,8 +3,9 @@
 #include <stdint.h>
 #include "multiboot2.h"
 #include "font.h"
+#include <stddef.h>
 
-struct Framebuffer{
+struct framebuffer{
     uint8_t * starting_address;
     uint32_t width;
     uint32_t height;
@@ -16,6 +17,7 @@ struct Framebuffer{
         uint8_t green_bits_index;
         uint8_t num_blue_bits;
         uint8_t blue_bits_index;
+        unsigned char pixel_size;
     } pixel;
 };
 
@@ -46,14 +48,18 @@ typedef enum {
 #define GREEN_INDEX 8
 #define BLUE_INDEX 0
 
-extern struct Framebuffer framebuffer;
+extern struct framebuffer framebuffer;
 extern Font curr_font;
 
 void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info); 
 
-void initialize_shell_UI(void);
-void print(void);
+void terminal_putchar(const uint32_t unicode_character_index, const Color char_color, const Color background_color);
+void terminal_printstr(const char *string, size_t num_chars);
 void set_background_color(Color background);
+bool inc_textCursor(void);
+bool dec_textCursor(void);
+
 
 #endif /*__VGA_DRIVER_H__*/
 
+void init_new_window();

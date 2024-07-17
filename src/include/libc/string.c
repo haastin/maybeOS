@@ -51,6 +51,17 @@ int strcmp(const char* s1, const char* s2){
     }
 }
 
+//Search functions 
+
+void *memchr(const void * s, int c, size_t n){
+    for(size_t idx=0;idx<n;idx++){
+        if (((unsigned char *) s)[idx] == (unsigned char)c){
+            return s;
+        }
+    }
+    return NULL;
+}
+
 //Functions in Misc section in ISO C
 void * memset(void* buff, int c, size_t n){
     unsigned char *buff_ptr = (unsigned char*) buff;

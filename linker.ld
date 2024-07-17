@@ -1,49 +1,80 @@
-/* the symbol in my .o files defined to be the entry point */
+/* the symbol from the symbol table (generated from all .o files) defined to be the start of execution of the OS image*/
 ENTRY(_start)
  
 /* Maps object file sections to memory addresses */
 SECTIONS
 {
-	/* From OSdev wiki: 
-		"It used to be universally recommended to use 1M as a start offset,
-	   as it was effectively guaranteed to be available under BIOS systems.
-	   However, UEFI has made things more complicated, and experimental data
-	   strongly suggests that 2M is a safer place to load. In 2016, a new
-	   feature was introduced to the multiboot2 spec to inform bootloaders
-	   that a kernel can be loaded anywhere within a range of addresses and
-	   will be able to relocate itself to run from such a loader-selected
-	   address, in order to give the loader freedom in selecting a span of
-	   memory which is verified to be available by the firmware, in order to
-	   work around this issue. This does not use that feature, so 2M was
-	   chosen as a safer option than the traditional 1M." */
-	. = 2M;
+	/* OSdev wiki recommendeds the OS image be located at physical mem address 2 MB based on research around best compatability with UEFI firmware and bootloader memory mappings. */
+
+	_kernel_vm_start = 0xC0200000;
+	_kernel_phys_start = 0x00200000;
+	_kernel_vm_offset = 0xC0000000;
+
+
+	/*certain functions are linked into physical memory addresses so that we can use them before paging is enabled */
+	
+	. = _kernel_phys_start;
+
+	.pre_paging ALIGN(4K) : {
+		_phys_kernel_start = .;
+		*(.multiboot2)
+		*boot.o(.text)
+		*gdt.o(.text)
+		*early_paging_setup.o(.text)
+
+		#because the two above files contain all functions needed to enable mem access and paging, i can get rid of the custom section below and all attributes i placed with it in my src code
+		*(.kernel_before_paging_code)
+		_phys_kernel_end = .;
+	}
+
+
+	/*We want the OS image to be linked AS IF it starts from its virtual address, but we dont *actually* want it to be loaded there. we want it to be loaded in lower physical mem in an ideal spot to avoid overwriting anything already placed in RAM by prior executed code before us. Linking witht he assumption of the virtual addy start is one way to allow the kernel to be remapped at this address in the virtual address space after paging is enabled */
+	
+	. += _kernel_vm_offset;
  
-	/* First put the multiboot header, as it is required to be put very early
+	_virt_kernel_start = .;
+	
+	_text_start = .;
+	.text ALIGN(4K) : AT(ADDR(.text) - _kernel_vm_offset) 
+	{
+		/* First put the multiboot header, as it is required to be put very early
 	   in the image or the bootloader won't recognize the file format.
 	   Next we'll put the .text section. */
-	
-	.text BLOCK(4K) : ALIGN(4K)
-	{
-		*(.multiboot2)
 		*(.text)
 	}
- 
+	_text_end = .;
+
+	
+
+	_rodata_start = .;
 	/* Read-only data. */
-	.rodata BLOCK(4K) : ALIGN(4K)
+	.rodata ALIGN(4K) : AT(ADDR(.rodata) - _kernel_vm_offset) 
 	{
 		*(.rodata)
 	}
- 
+	_rodata_end = .;
+
+	_data_start = .;
 	/* Read-write data (initialized) */
-	.data BLOCK(4K) : ALIGN(4K)
+	.data ALIGN(4K) : AT(ADDR(.data) - _kernel_vm_offset) 
 	{
 		*(.data)
 	}
- 
+	_data_end = .;
+
+	_bss_start = .;
 	/* Read-write data (uninitialized) and stack */
-	.bss BLOCK(4K) : ALIGN(4K)
+	.bss ALIGN(4K) : AT(ADDR(.bss) - _kernel_vm_offset) 
 	{
 		*(COMMON)
 		*(.bss)
 	}
+	_bss_end = .;
+
+	_virt_kernel_end = .;
+
+	_kernel_phys_size = _phys_kernel_end - _phys_kernel_start;
+	_kernel_virt_size = _virt_kernel_end - _virt_kernel_start ;
+
+	_kernel_size = _kernel_phys_size + _kernel_virt_size;
 }

@@ -15,6 +15,18 @@ void set_font(Font_Name font_name){
     }
 }
 
+bool isCharBit(unsigned char* char_bitmap, unsigned char bits_shifted){
+
+    //by shifting the glyph pointer we can have a font width or height larger than the bit size of the underlying platform
+    unsigned char bytes_shifted = bits_shifted/8;
+    char_bitmap += bytes_shifted;
+    bits_shifted %= 8;
+
+     //isolate the MSB of the bitmap since that is our current bit 
+    unsigned char adjusted_bitmap = (*char_bitmap << bits_shifted);
+    return (adjusted_bitmap & (1 << (curr_font.width-1))) ? true : false;
+}
+
 static inline bool is_psf1_font(void * psf_font_file){
    
     if (((PSF1_FontHeader *) psf_font_file)->magic == PSF1_FONT_MAGIC){

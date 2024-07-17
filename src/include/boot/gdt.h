@@ -117,6 +117,13 @@ of a GDT descriptor to improve readability*/
 #define INTERRUPT_GATE_32BIT 14
 #define TRAP_GATE_32BIT 15
 
-void build_segment_descriptor(struct segment_descriptor * seg_desc, uint32_t baseaddress, uint32_t segmentlimit, uint8_t flag_lowbits, uint8_t flag_highbits);
+//change this if adding any extra segments
+//TODO: need to add user mode code and data segs
+#define NUM_GDT_ENTRIES 3
+
+void build_segment_descriptor(struct segment_descriptor * seg_desc, uint32_t baseaddress, uint32_t segmentlimit, uint8_t flag_lowbits, uint8_t flag_highbits) __attribute__((section(".kernel_before_paging_code")));
+
+void init_gdt(void) __attribute__((section(".kernel_before_paging_code")));
+
 
 #endif //GDT_H

@@ -24,10 +24,10 @@ INCLUDE_PATHS := $(shell find $(SRCDIR)/include -type d | sed 's/^/-I/')
 
 # the ?= operator checks if an env var exists of the same name as this Makefile var, and if so sets this variable to the  the env var value; otherwise it uses the value specified here in the Makefile. If I want to compile w/ debugging symbols, I will make this an env var =-g, otherwise this var won't do anything
 DEBUG_ENV_VAR ?= 
-
-CFLAGS := -ffreestanding -Wall -Wextra $(INCLUDE_PATHS) -O0 $(DEBUG_ENV_VAR) #-Werror
+DEFINED_MACROS := -DPAGE_SIZE_4K
+CFLAGS := -ffreestanding -Wall -Wextra $(INCLUDE_PATHS) $(DEFINED_MACROS) -O0 $(DEBUG_ENV_VAR) #-Werror
 AFLAGS := -E -P $(INCLUDE_PATHS)
-LDFLAGS := -T linker.ld -ffreestanding -nostdlib -lgcc -Wall -Wextra $(DEBUG_ENV_VAR)
+LDFLAGS := -T linker.ld -ffreestanding -nostdlib -lgcc -Wall -Wextra $(DEBUG_ENV_VAR) -v
 
 #these find commands recursively search the srcdir and grabs the relative path of all files matching the regex and returns them
 SOURCES := $(shell find $(SRCDIR) -type f -name '*.c')

@@ -38,8 +38,43 @@ _start:
 
     /*at this point we have a code and data segment in a basic GDT passed from GRUB, but not our own GDT,
 and paging isn't enabled*/
-    mov $stack_top, %esp
-    //we finish setting up in C now that our stack has been initialized
+    lea stack_top, %eax
+    sub $_kernel_vm_offset, %eax
+    mov %eax, %esp
+
+    //push the address of the multiboot tags we get from GRUB here so we don't lose them before we parse them; will eventually be the parameter to kernel_start
+    push %ebx
+
+    call init_gdt
+
+    lea _kernel_vm_start, %eax
+    pushl %eax
+    lea _kernel_phys_start, %eax
+    pushl %eax
+
+    call before_paging_page_dir_and_table_setup
+
+    //remove the parameters we pushed to stack
+    add $16, %esp
+
+    #set root kernel page dir in cr3
+    lea kernel_init_page_dir, %eax
+    sub $_kernel_vm_offset, %eax
+    mov %eax, %cr3
+
+    #disable PAE
+    mov %cr4, %eax
+    and $~(1 << 5), %eax
+    mov %eax, %cr4
+
+    #enable paging
+    mov %cr0, %eax
+    or $(1 << 31), %eax
+    mov %eax, %cr0
+    #jmp $0x8,$.continue
+    
+    .continue:
+    add $_kernel_vm_offset, %esp
    
     call kernel_start
 

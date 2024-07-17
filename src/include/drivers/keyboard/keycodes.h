@@ -1,6 +1,7 @@
-#ifndef KEYCODES_H__
-#define KEYCODES_H__
-
+#ifndef __KEYCODES_H__
+#define __KEYCODES_H__
+#include "ctype.h"
+//the values assigned to each come from USB Usage Table 
 //some fields are missing, but likely wont use them for now
 #define KEY_RESERVED            0x00
 #define KEY_ERR_ROLLOVER        0x01
@@ -113,4 +114,6 @@
 #define KEY_R_GUI         0xE7
 #define KEY_RESERVED_DV                    0xE8
 
+extern const char* modified_printable_keycode_mappings[];
+extern const char *base_printable_keycode_mappings[];
 #endif /*KEYCODES_H__*/

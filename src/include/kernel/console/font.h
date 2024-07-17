@@ -13,6 +13,8 @@ extern char _binary_gr928b_8x16_psfu_end[];
 #define PSF2_FONT_MAGIC 0x864ab572
 
 #define DEFAULT_FONT gr928b_8x16
+#define DEFAULT_FONT_WIDTH
+#define DEFAULT_FONT_HEIGHT
 
 
 //PSF1 glyphs are always 8 bits wide
@@ -49,5 +51,7 @@ typedef struct{
 
 void initialize_font(Font_Name, Font*);
 void set_font(Font_Name font_name);
+
+bool isCharBit(unsigned char *char_bitmap, unsigned char bits_shifted);
 
 #endif /*__FONT_H__*/
