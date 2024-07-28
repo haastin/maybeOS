@@ -33,6 +33,9 @@ extern unsigned long _kernel_size, _kernel_phys_size, _kernel_virt_size, _virt_k
 
 #define MAX_SUPPORTED_MEM_BANKS 10
 
+//this supports a maximum of 4 GiB of mem
+#define NUM_PAGES_FOR_ALLOC_BITMAP 32
+
 typedef struct {
     void * start;
     size_t length;

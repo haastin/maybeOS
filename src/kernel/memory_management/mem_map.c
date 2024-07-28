@@ -46,6 +46,8 @@ void init_memory(struct multiboot_tag_mmap *mmap_tag){
         mem_entry++;
     }
 
+    init_pmm(boot_cpu_mem.length);
+
 }
 
 bool is_page_usable(unsigned long pageframe_address){

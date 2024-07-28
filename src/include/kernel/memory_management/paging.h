@@ -123,6 +123,8 @@
 #define pfn_to_phys_addy(pfn) ((pfn)*PAGE_SIZE)
 #define phys_addy_to_pfn(phys_addy) ((phys_addy)/PAGE_SIZE)
 
+#define num_pages_needed(size) (((size) + (PAGE_SIZE-1))/PAGE_SIZE)
+
 
 typedef struct {
     uint32_t pte_val;

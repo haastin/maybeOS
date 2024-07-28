@@ -6,14 +6,140 @@
 #include "pmm.h"
 #include "utils.h"
 #include "string.h"
+#include "vmm.h"
 
-#define NUM_BITS_IN_ONE_BITMAP sizeof(unsigned int)*8
+#define NUM_BITS_IN_ONE_BITMAP (sizeof(unsigned int)*8)
 
 //defines the bounds of the bitmap we will use for dynamic memory alloc- this is technically the first "allocation" of the system since it dynamically sets the bounds of the bitmap depending on how much memory is detected by the bootloader. this memory will be marked as used in the bitmap after it is initialized
 unsigned long pmm_bitmap_start_addy;
 unsigned long pmm_bitmap_end_addy;
+unsigned long bitmap_num_bits;
 
 void * alloc_bitmap;
+
+static inline unsigned int * get_pfn_parent_bitmap(void * bitmap_start, unsigned int pfn){
+    
+    //this is the num of unsigned ints from the start of the bitmap to the unsinged long the requested pfn resides in 
+    unsigned int num_bitmaps_to_advance = pfn/NUM_BITS_IN_ONE_BITMAP;
+    
+    unsigned int * parent_bitmap = ((unsigned int *) bitmap_start) + num_bitmaps_to_advance;
+
+    return parent_bitmap;
+}
+
+static bool test_bit(void * bitmap, size_t bit_index){
+
+    unsigned int * parent_bitmap = get_pfn_parent_bitmap(bitmap, bit_index);
+    unsigned char local_bit_idx = bit_index % NUM_BITS_IN_ONE_BITMAP;
+    return *parent_bitmap & (1 << local_bit_idx);
+}
+
+static unsigned int find_first_avail_pageframe(void * bitmap, unsigned long num_sequential_bits_needed){
+
+    bitmap = (unsigned int *) bitmap;
+
+    for(size_t bit_idx=0; bit_idx< bitmap_num_bits; bit_idx++){
+        bool isAllocated = test_bit(bitmap, bit_idx);
+        if(!isAllocated){
+            unsigned int last_bit_idx = bit_idx + num_sequential_bits_needed;
+            bool enoughSpace = (last_bit_idx < bitmap_num_bits);
+            if(!enoughSpace){
+                return -1;
+            }
+            else{
+                bool failed = false;
+                for(size_t seq_bit_idx=bit_idx+1; seq_bit_idx <= (bit_idx+num_sequential_bits_needed); seq_bit_idx++)
+                    {
+                        bool isAllocated = test_bit(bitmap, seq_bit_idx);
+                        if(isAllocated){
+                            failed = true;
+                            break;
+                        }
+                    }
+                if(!failed){
+                    return bit_idx;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+static bool alloc_pfn(void * bitmap, unsigned int pfn){
+
+    unsigned int * pfn_parent_bitmap = get_pfn_parent_bitmap(bitmap, pfn);
+    unsigned int pfn_bit_index = pfn % NUM_BITS_IN_ONE_BITMAP;
+    
+    if(*pfn_parent_bitmap & (1 << pfn_bit_index)){
+        //the bit was already set, meaning this was already allocated; should NOT reach this point
+        //TODO: printk error here
+        return false;
+    }
+
+    *pfn_parent_bitmap |= (1 << pfn_bit_index); 
+    
+    return true;
+}
+
+static bool free_pfn(void * bitmap, unsigned int pfn){
+   
+    unsigned int * pfn_parent_bitmap = get_pfn_parent_bitmap(bitmap, pfn);
+    unsigned int pfn_bit_index = pfn % NUM_BITS_IN_ONE_BITMAP;
+    
+    if(!(*pfn_parent_bitmap & (1 << pfn_bit_index))){
+        //the bit was already free, meaning this was already allocated; should NOT reach this point
+        //TODO: printk error here
+        return false;
+    }
+
+    *pfn_parent_bitmap &= ~(1 << pfn_bit_index);
+
+    return true;
+}
+
+void * alloc_pageframe(size_t size){
+    unsigned long num_sequential_bits_needed = num_pages_needed(size);
+    unsigned int first_avail_pfn = find_first_avail_pageframe(alloc_bitmap, num_sequential_bits_needed);
+    if(first_avail_pfn == -1){
+        return NULL;
+    }
+    bool alloc_success = alloc_pfn(alloc_bitmap, first_avail_pfn);
+    if(!alloc_success){
+        return NULL;
+    }
+    return pfn_to_phys_addy(first_avail_pfn);
+}
+
+/**
+ * @param physical_address 
+ * @param size
+ */
+bool alloc_requested_pageframe(unsigned long physical_address, size_t size){
+    unsigned int requested_pfn = (unsigned int) phys_addy_to_pfn(physical_address);
+    unsigned long num_sequential_bits_needed = num_pages_needed(size);
+    bool enoughSpace = ((requested_pfn + num_sequential_bits_needed) < bitmap_num_bits);
+    if(!enoughSpace){
+        return false;
+    }
+    for(size_t pfn=requested_pfn; pfn<(requested_pfn+num_sequential_bits_needed); pfn++){
+        bool isAllocated = test_bit(alloc_bitmap, pfn);
+        if(isAllocated){
+            return false;
+        }
+    }
+    //if we made it here, there is enough space
+    for(size_t pfn=requested_pfn; pfn<(requested_pfn+num_sequential_bits_needed); pfn++){
+        alloc_pfn(alloc_bitmap, pfn);
+    }
+
+    return true;
+}
+
+bool free_pageframe(unsigned long pageframe_addy){
+    unsigned int pfn_to_free = phys_addy_to_pfn(pageframe_addy);
+    bool wasFreed = free_pfn(alloc_bitmap, pfn_to_free);
+    return wasFreed;
+}
 
 /**
  * @param memory_size Size of RAM 
@@ -21,98 +147,35 @@ void * alloc_bitmap;
 void init_pmm(unsigned long memory_size){
 
     pmm_bitmap_start_addy = round_up_to_nearest_page(VIRT_KERNEL_END);
-    unsigned int num_bits_needed = memory_size/PAGE_SIZE;
-    unsigned int pmm_bitmap_byte_size = num_bits_needed/8;
-    pmm_bitmap_end_addy = pmm_bitmap_start_addy + pmm_bitmap_byte_size;
+    bitmap_num_bits = memory_size/PAGE_SIZE;
+    unsigned int pmm_bitmap_byte_size = bitmap_num_bits/8;
+    pmm_bitmap_end_addy = round_up_to_nearest_page(pmm_bitmap_start_addy + pmm_bitmap_byte_size);
     alloc_bitmap = (void *) pmm_bitmap_start_addy;
+
+    //direct map the allocation bitmap so we can start to access it
+    unsigned int pages_req_for_bitmap = (pmm_bitmap_end_addy - pmm_bitmap_start_addy)/PAGE_SIZE;
+    for(size_t idx=0; idx<pages_req_for_bitmap; idx++){
+        //we aren't allocating this as a dynamic alloc area, because the vmm relies on the pmm existing, so there's no point in keeping track of it in the vmm; the vmm's starting address is simply made to be after the end of the bitmap. However, since the mapping API uses the flags I define for a general, arch-independent paging (truly an address space) entry, we use them here
+        unsigned long curr_page = pmm_bitmap_start_addy + (idx*PAGE_SIZE);
+        map_pageframe(&kernel_PGD,phys_addy(curr_page),curr_page,VM_AREA_WRITE);
+    }
+
     //mark all pages all allocated
     memset(alloc_bitmap, 0xff, pmm_bitmap_byte_size);
+
     //free pages found to be in usable RAM
+    for(size_t pfn=0; pfn<bitmap_num_bits; pfn++){
+        unsigned long check_address = pfn_to_phys_addy(pfn);
+        bool usable = is_page_usable(check_address);
+        if(usable){
+            free_pfn(alloc_bitmap, pfn);
+        }
+    }
 
     //alloc the necessary pages for this bitmap
-}
-
-static unsigned int find_first_avail_pageframe(void){
-
-    unsigned int * bitmap = (unsigned int *)pmm_bitmap_start_addy;
-
-    //keeps track of how many bits we've checked so far 
-    unsigned int bit_counter = 0;
-    
-    while(bitmap <= (unsigned int *)pmm_bitmap_end_addy){
-        //gcc builtin that finds set bit w/ least index in an int
-        unsigned int res = (unsigned int) __builtin_ffs((int) *bitmap);
-        if(res){
-            //return a pfn 
-            return (bit_counter + res);
-        }
-        else{
-            //advance to the next bitmap
-            bitmap++;
-            //increase the bit counter by num of bits in an unsigned int
-            bit_counter += NUM_BITS_IN_ONE_BITMAP;
-        }
+    bool bitmap_allocated = alloc_requested_pageframe(phys_addy(pmm_bitmap_start_addy),pmm_bitmap_byte_size);
+    if(!bitmap_allocated){
+        //TODO: printk error here
     }
-
-}
-
-static unsigned int * get_pfn_bitmap(unsigned int pfn){
-    //this is the num of unsigned ints from the start of the bitmap to the unsinged long the requested pfn resides in 
-    unsigned int requested_pfn_bitmap_offset = pfn / NUM_BITS_IN_ONE_BITMAP;
-    unsigned int * bitmap = (unsigned int *)pmm_bitmap_start_addy;
-    bitmap += requested_pfn_bitmap_offset;
-    return bitmap;
-}
-
-static unsigned char get_pfn_bit(unsigned int pfn){
-    unsigned int * pfn_bitmap = get_pfn_bitmap(pfn);
-    unsigned int pfn_bit_index = pfn % NUM_BITS_IN_ONE_BITMAP;
-    unsigned char pfn_bit = ((*pfn_bitmap) >> pfn_bit_index) & 0x1;
-    return pfn_bit;
-}
-
-
-static bool set_pfn_bit(unsigned int pfn){
-    unsigned char pfn_bit = get_pfn_bit(pfn);
-    if(pfn_bit == 1){
-        //the page is already allocated
-        return false;
-    }
-    else{
-        unsigned int * pfn_bitmap = get_pfn_bitmap(pfn);
-        unsigned int pfn_bit_index = pfn % NUM_BITS_IN_ONE_BITMAP;
-        *pfn_bitmap |= (1 << pfn_bit_index); 
-    }
-    return true;
-}
-
-static bool free_pfn_bit(unsigned int pfn){
-    unsigned char pfn_bit = get_pfn_bit(pfn);
-    if(pfn_bit == 0){
-        //the page is already free
-        return false;
-    }
-    else{
-        unsigned int * pfn_bitmap = get_pfn_bitmap(pfn);
-        unsigned int pfn_bit_index = pfn % NUM_BITS_IN_ONE_BITMAP;
-        *pfn_bitmap &= ~(1 << pfn_bit_index);
-    }
-    return true;
-}
-
-void * alloc_pageframe(void){
-    unsigned int first_avail_pfn = find_first_avail_pageframe();
-    return pfn_to_phys_addy(first_avail_pfn);
-}
-
-bool alloc_requested_pageframe(unsigned long physical_address){
-    unsigned int requested_pfn = (unsigned int) phys_addy_to_pfn(physical_address);
-    bool res = set_pfn_bit(requested_pfn);
-    return res;
-}
-
-bool free_pageframe(unsigned long pageframe_addy){
-    unsigned int pfn_to_free = phys_addy_to_pfn(pageframe_addy);
-    bool res = free_pfn_bit(pfn_to_free);
-    return res;
+    return;
 }

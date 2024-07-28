@@ -66,7 +66,7 @@ bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, 
     if(pgd_p){ 
         
         unsigned int pde_idx = get_PDE_idx((uintptr_t)virtual_addy); 
-        Page_Directory_Entry_t * pde_p = (Page_Directory_Entry_t *) &pgd_p[pde_idx];
+        Page_Directory_Entry_t * pde_p = (Page_Directory_Entry_t *) &pgd_p->page_tables[pde_idx];
         
         if(!paging_entry_present(pde_p->pde_val)){
             alloc_page_table(pgd, pde_idx);
@@ -76,7 +76,7 @@ bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, 
         Page_Table_t * pt_p = (Page_Table_t *) get_pageframe_address(pde_p->pde_val);
         
         unsigned int pte_idx = get_PTE_idx((uintptr_t)virtual_addy);  
-        Page_Table_Entry_t * pte_p = (Page_Table_Entry_t *) &pt_p[pte_idx];
+        Page_Table_Entry_t * pte_p = (Page_Table_Entry_t *) &pt_p->page_frames[pte_idx];
         
         //at this point pte_p->pte_val should be 0, indicating the PTE is not present; since this is expected, we don't check that with an if statement here
 

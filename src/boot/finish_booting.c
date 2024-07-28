@@ -87,8 +87,6 @@ void initialize_peripheral_devices(void){
 }
 
 void initialize_mm(void){
-    //TODO: dont assume RAM starts at 0x0
-    init_pmm(boot_cpu_mem.length);
 }
 
 void kernel_start(uint32_t multiboot2_bootinfo_startaddress){
