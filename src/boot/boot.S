@@ -52,13 +52,13 @@ and paging isn't enabled*/
     lea _kernel_phys_start, %eax
     pushl %eax
 
-    call before_paging_page_dir_and_table_setup
+    call before_paging_init_page_tables
 
     //remove the parameters we pushed to stack
-    add $16, %esp
+    add $8, %esp
 
     #set root kernel page dir in cr3
-    lea kernel_init_page_dir, %eax
+    lea kernel_PGD, %eax
     sub $_kernel_vm_offset, %eax
     mov %eax, %cr3
 

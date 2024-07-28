@@ -6,7 +6,7 @@
 #include "ps2.h"
 #include "idt.h"
 #include "isr.h"
-
+#include "mem_map.h"
 #include "apic.h"
 #include "acpi.h"
 #include "lapic.h"
@@ -51,12 +51,6 @@ static void init_idt(void){
 }
 
 static void store_multiboot2_bootinfo(uint32_t multiboot2_bootinfo_startaddress){
-    asm volatile (
-        "movl %%ebx, %0;" // Move ebx into my_var
-        : "=r" (multiboot2_bootinfo_startaddress)   // Output operand
-        :                 // Input operand (none)
-        : "%ebx"          // Clobbered register (ebx)
-    );
 
     //this loop logic is from GRUB's multiboot2 example code, slightly modified to improve readability
     for(struct multiboot_tag *tag = (struct multiboot_tag *)((char*)multiboot2_bootinfo_startaddress + 8);
@@ -72,8 +66,10 @@ static void store_multiboot2_bootinfo(uint32_t multiboot2_bootinfo_startaddress)
                     struct multiboot_tag_new_acpi * acpi_info_tag = (struct multiboot_tag_new_acpi *) tag;
                     process_acpi_info(acpi_info_tag);
                     break;
-
-                    
+                case(MULTIBOOT_TAG_TYPE_MMAP):
+                    struct multiboot_tag_mmap * mmap_tag = (struct multiboot_tag_mmap *) tag;
+                    init_memory(mmap_tag);
+                    break;      
             }
         }
 }
@@ -90,11 +86,17 @@ void initialize_peripheral_devices(void){
     initialize_ps2keyboard();
 }
 
+void initialize_mm(void){
+    //TODO: dont assume RAM starts at 0x0
+    init_pmm(boot_cpu_mem.length);
+}
+
 void kernel_start(uint32_t multiboot2_bootinfo_startaddress){
     
     //at this point the GDT is initialized and paging is enabled
     
     store_multiboot2_bootinfo(multiboot2_bootinfo_startaddress);
+    initialize_mm();
     initialize_interrupts();
     initialize_peripheral_devices();
     start_shell();
