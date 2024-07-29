@@ -5,7 +5,7 @@ void init_pmm(unsigned long memory_size);
 
 void * alloc_pageframe(size_t size);
 
-bool alloc_requested_pageframe(unsigned long physical_address, size_t size);
+void * alloc_requested_pageframe(unsigned long physical_address, size_t size);
 
 bool free_pageframe(unsigned long pageframe_addy);
 

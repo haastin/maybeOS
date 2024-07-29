@@ -5,7 +5,6 @@
 #include "paging.h"
 
 #define NUM_PAGES_REQUESTED_WHEN_FULL 2
-#define HEAP_SIZE 20*PAGE_SIZE
 
 void * start;
 void * end;
@@ -58,11 +57,11 @@ bool free(void * start_address_for_allocation){
     //
 }
 
-void init_kheap(void){
+void init_kheap(void * heap_start){
 
     //at the start, the heap is only given one page, this will change once the vmm and kheap are initialized
-    start = vmm_first_heap_alloc();
-    end = start + PAGE_SIZE;
+    start = heap_start;
+    end = start + HEAP_SIZE;
 
     //request the rest of the pages allocated for the heap after getting the first (kmalloc can now be used)
     bool allocated = vmalloc_request_virtual_pages(end, HEAP_SIZE-PAGE_SIZE);

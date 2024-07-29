@@ -5,6 +5,7 @@
 #include "vmm.h"
 #include "pmm.h"
 #include "string.h"
+#include "utils.h"
 
 Page_Directory_t kernel_PGD __attribute__((aligned(0x1000)));
 
@@ -16,10 +17,10 @@ Page_Table_t kernel_directmap_PT __attribute__((aligned(0x1000)));
 static void alloc_page_table(void * pgd, unsigned int pde_index){
 
     //call PMM to alloc phys page
-    uint32_t phys_address = alloc_pageframe();
+    void * phys_address = alloc_pageframe(NUM_PAGING_STRUCTURE_ENTRIES_IN_32_BIT_MODE*BYTES_PER_PAGING_ENTRY);
 
     //init the page table to be all 0s
-    memset((void *)phys_address, 0, PAGE_SIZE);
+    memset(phys_address, 0, PAGE_SIZE);
 
     //create and insert PDE entry with this pageframe addy
     Page_Directory_t * pgd_p = (Page_Directory_t *) pgd;
@@ -73,6 +74,7 @@ bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, 
         }
 
         //now that we've checked the PDE is valid, we can treat the page frame address as a page table
+        //TODO: this only works because the only page tables i've used so far are ones statically allocated in my kernel, which are all identity-mapped. if i want to be able to access DYNAMICALLY allocated page tables to add a PTE or retrieve a PTE/PDE, i must know their virtual addres
         Page_Table_t * pt_p = (Page_Table_t *) get_pageframe_address(pde_p->pde_val);
         
         unsigned int pte_idx = get_PTE_idx((uintptr_t)virtual_addy);  
@@ -96,6 +98,27 @@ bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, 
 
     return true;
 
+}
+
+bool map_contiguous_pages(void * pgd, unsigned long physical_address_start, unsigned long virtual_address_start, size_t flags, size_t num_pages){
+
+    for(size_t page=0; page<num_pages; page++){
+        map_pageframe(pgd, physical_address_start + page*PAGE_SIZE, virtual_address_start + page*PAGE_SIZE, flags);
+    }
+}
+
+bool identity_map_pageframes(void * pgd, unsigned long physical_address_start, size_t flags, size_t num_pages){
+
+    for(size_t page=0; page<num_pages; page++){
+        map_pageframe(pgd, physical_address_start + page*PAGE_SIZE, physical_address_start + page*PAGE_SIZE, flags);
+    }
+}
+
+bool direct_map_pageframes(void * pgd, unsigned long physical_address_start, size_t flags, size_t num_pages){
+    
+    for(size_t page=0; page<num_pages; page++){
+        map_pageframe(pgd, physical_address_start + page*PAGE_SIZE, virt_addy(physical_address_start) + page*PAGE_SIZE, flags);
+    }
 }
 
 

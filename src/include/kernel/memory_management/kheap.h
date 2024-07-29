@@ -9,8 +9,11 @@ typedef struct{
 
 } heap_alloc_t;
 
-#endif /*__KHEAP_H__*/
+#define HEAP_SIZE 20*PAGE_SIZE
 
 void init_heap_alloc_entry(heap_alloc_t *new_heap_entry, size_t size);
 
-void init_kheap(void);
+void init_kheap(void * heap_start);
+
+
+#endif /*__KHEAP_H__*/

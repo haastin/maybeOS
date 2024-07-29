@@ -34,7 +34,7 @@ static bool test_bit(void * bitmap, size_t bit_index){
     return *parent_bitmap & (1 << local_bit_idx);
 }
 
-static unsigned int find_first_avail_pageframe(void * bitmap, unsigned long num_sequential_bits_needed){
+static unsigned int find_first_avail_pfn(void * bitmap, unsigned long num_sequential_bits_needed){
 
     bitmap = (unsigned int *) bitmap;
 
@@ -99,7 +99,7 @@ static bool free_pfn(void * bitmap, unsigned int pfn){
 
 void * alloc_pageframe(size_t size){
     unsigned long num_sequential_bits_needed = num_pages_needed(size);
-    unsigned int first_avail_pfn = find_first_avail_pageframe(alloc_bitmap, num_sequential_bits_needed);
+    unsigned int first_avail_pfn = find_first_avail_pfn(alloc_bitmap, num_sequential_bits_needed);
     if(first_avail_pfn == -1){
         return NULL;
     }
@@ -114,17 +114,17 @@ void * alloc_pageframe(size_t size){
  * @param physical_address 
  * @param size
  */
-bool alloc_requested_pageframe(unsigned long physical_address, size_t size){
+void * alloc_requested_pageframe(unsigned long physical_address, size_t size){
     unsigned int requested_pfn = (unsigned int) phys_addy_to_pfn(physical_address);
     unsigned long num_sequential_bits_needed = num_pages_needed(size);
     bool enoughSpace = ((requested_pfn + num_sequential_bits_needed) < bitmap_num_bits);
     if(!enoughSpace){
-        return false;
+        return NULL;
     }
     for(size_t pfn=requested_pfn; pfn<(requested_pfn+num_sequential_bits_needed); pfn++){
         bool isAllocated = test_bit(alloc_bitmap, pfn);
         if(isAllocated){
-            return false;
+            return NULL;
         }
     }
     //if we made it here, there is enough space
@@ -132,7 +132,7 @@ bool alloc_requested_pageframe(unsigned long physical_address, size_t size){
         alloc_pfn(alloc_bitmap, pfn);
     }
 
-    return true;
+    return physical_address;
 }
 
 bool free_pageframe(unsigned long pageframe_addy){
@@ -173,8 +173,8 @@ void init_pmm(unsigned long memory_size){
     }
 
     //alloc the necessary pages for this bitmap
-    bool bitmap_allocated = alloc_requested_pageframe(phys_addy(pmm_bitmap_start_addy),pmm_bitmap_byte_size);
-    if(!bitmap_allocated){
+    void * bitmap_phys_address = alloc_requested_pageframe(phys_addy(pmm_bitmap_start_addy),pmm_bitmap_byte_size);
+    if(!bitmap_phys_address){
         //TODO: printk error here
     }
     return;

@@ -156,5 +156,10 @@ extern Page_Table_t kernel_directmap_PT __attribute__((aligned(0x1000)));
 
 bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, size_t flags);
 
+bool map_contiguous_pages(void *pgd, unsigned long physical_address_start, unsigned long virtual_address_start, size_t flags, size_t num_pages);
+
+bool identity_map_pageframes(void * pgd, unsigned long physical_address_start, size_t flags, size_t num_pages);
+
+bool direct_map_pageframes(void *pgd, unsigned long physical_address_start, size_t flags, size_t num_pages);
 
 #endif /*__PAGING_H__*/
