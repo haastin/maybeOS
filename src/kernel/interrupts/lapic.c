@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include "string.h"
 #include "lapic.h"
+#include "driver.h"
 
 #define IA32_LAPIC_MSR_NUM 0x1B
 
@@ -18,6 +19,7 @@
 #define LVT_INTERRUPT_MASK_BIT_OFFSET 16
 #define APIC_MSR_GLOBALENABLE_BIT_OFFSET 11
 
+#define LAPIC_MMIO_LENGTH 0x1000
 
 /**
  * LVT entry config options
@@ -89,7 +91,8 @@ void initialize_lapic(){
     if(have_lapic){
         struct IA32_APIC_MSR lapic_msr = get_lapic_msr(IA32_LAPIC_MSR_NUM);
         lapic_base_address = (volatile uint32_t *)(lapic_msr.LAPIC_base_inunitsofpages << 12);
-        lapic = lapic_base_address;
+
+        init_MMIO_device(lapic_base_address, LAPIC_MMIO_LENGTH);
         disable_pic();
         enable_lapic();
         unsigned char spur_vec = 0xFF; //some implementations require a high bit of 1, so this is the recommend vector for spurious interrupt

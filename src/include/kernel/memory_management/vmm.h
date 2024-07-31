@@ -23,13 +23,18 @@ typedef struct dynam_alloc_area{
 
 #define VM_AREA_MMIO (1 << 3)
 
+
 #endif /*__VMM_H__*/
+
+void *vmalloc_request_more_memory(unsigned long starting_address, size_t extension_size);
+
+bool vmalloc_free(unsigned long virtual_page_address);
 
 void init_vmm();
 
 void *vmm_first_heap_alloc(void);
 
-void *vmalloc(unsigned long requested_size);
+void *vmalloc(size_t requested_size, size_t flags);
 
-bool vmalloc_request_virtual_pages(unsigned long virtual_page_address, size_t num_pages);
+void * vmalloc_request_virtual_address(unsigned long virtual_page_address, size_t flags, size_t num_pages);
 

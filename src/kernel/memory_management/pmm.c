@@ -41,7 +41,7 @@ static unsigned int find_first_avail_pfn(void * bitmap, unsigned long num_sequen
     for(size_t bit_idx=0; bit_idx< bitmap_num_bits; bit_idx++){
         bool isAllocated = test_bit(bitmap, bit_idx);
         if(!isAllocated){
-            unsigned int last_bit_idx = bit_idx + num_sequential_bits_needed;
+            unsigned int last_bit_idx = bit_idx + num_sequential_bits_needed - 1;
             bool enoughSpace = (last_bit_idx < bitmap_num_bits);
             if(!enoughSpace){
                 return -1;
@@ -103,9 +103,11 @@ void * alloc_pageframe(size_t size){
     if(first_avail_pfn == -1){
         return NULL;
     }
-    bool alloc_success = alloc_pfn(alloc_bitmap, first_avail_pfn);
-    if(!alloc_success){
-        return NULL;
+    for(size_t pfn=0; pfn<num_sequential_bits_needed; pfn++){
+        bool alloc_success = alloc_pfn(alloc_bitmap, first_avail_pfn + pfn);
+        if(!alloc_success){
+            return NULL;
+        }
     }
     return pfn_to_phys_addy(first_avail_pfn);
 }
@@ -163,8 +165,9 @@ void init_pmm(unsigned long memory_size){
     //mark all pages all allocated
     memset(alloc_bitmap, 0xff, pmm_bitmap_byte_size);
 
-    //free pages found to be in usable RAM
-    for(size_t pfn=0; pfn<bitmap_num_bits; pfn++){
+    //free pages found to be in usable RAM; only free pages above 1 MiB; the lower 1 MiB will remain not used so that MMIO devs can accesses it if needed, and the heap pages will be allocated before MMIO devices are registered, so we want to make sure those pages aren't allocated to the heap
+    size_t pfn_for_1MiB = 0x100000/PAGE_SIZE;
+    for(size_t pfn=pfn_for_1MiB; pfn<bitmap_num_bits; pfn++){
         unsigned long check_address = pfn_to_phys_addy(pfn);
         bool usable = is_page_usable(check_address);
         if(usable){

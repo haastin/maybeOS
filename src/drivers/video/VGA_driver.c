@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include "font.h"
 #include "string.h"
+#include "driver.h"
+
 
 typedef struct {
     uint8_t red;
@@ -138,6 +140,7 @@ void terminal_printstr(const char * string, size_t num_chars){
 }
 
 void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info){
+    
     framebuffer.starting_address = (uint8_t *)(uint32_t)framebuffer_info->common.framebuffer_addr;
     framebuffer.width = framebuffer_info->common.framebuffer_width;
     framebuffer.height = framebuffer_info->common.framebuffer_height;
@@ -150,6 +153,9 @@ void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * frameb
     framebuffer.pixel.num_blue_bits = framebuffer_info->framebuffer_blue_mask_size;
     framebuffer.pixel.blue_bits_index = framebuffer_info->framebuffer_blue_field_position;
 
+    unsigned long framebuffer_mmio_length = (framebuffer.width*framebuffer.height)*(framebuffer_info->common.framebuffer_bpp/8);
+    init_MMIO_device(framebuffer.starting_address, framebuffer_mmio_length);
+    init_MMIO_device(0xDEADBEEF, 0xB00B);
     set_font(DEFAULT_FONT);
     init_text_mode_info();
     plot_text_cursor();

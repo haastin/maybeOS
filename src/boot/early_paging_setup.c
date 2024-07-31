@@ -77,7 +77,7 @@ void before_paging_init_page_tables(unsigned long kernel_starting_phys_addy, uns
 
     Page_Directory_t * phys_kern_pagedir = (Page_Directory_t *) phys_addy(&kernel_PGD);
     Page_Table_t * phys_kern_identity_pagetab = (Page_Table_t *) phys_addy(&kernel_identitymap_PT);
-    Page_Table_t * phys_kern_virtual_pagetab = (Page_Table_t *) phys_addy(&kernel_identitymap_PT);
+    Page_Table_t * phys_kern_virtual_pagetab = (Page_Table_t *) phys_addy(&kernel_directmap_PT);
 
     //init entries of page dir and page tables
     early_memset(phys_kern_pagedir, 0, sizeof(Page_Directory_t));
@@ -124,5 +124,10 @@ void before_paging_init_page_tables(unsigned long kernel_starting_phys_addy, uns
         create_paging_entry(curr_aligned_phys_addy_being_mapped, curr_aligned_virt_addy_being_mapped);
 
     }
+    
+    //because the recursive entry is at index 936 in the paging structures, nothing should be using the existing kernel or HW mappings in this table, so it's likely ok to overwrite them. need to do this here because going forward page tables only have their address only referred to with a recursive mapping, which these don't initially have.
+    
+    phys_kern_identity_pagetab->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX] = before_paging_create_pte(phys_addy(&kernel_identitymap_PT));
 
+    phys_kern_virtual_pagetab->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX] = before_paging_create_pte(phys_addy(&kernel_directmap_PT));
 }

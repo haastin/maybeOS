@@ -33,7 +33,7 @@ extern unsigned long _kernel_size, _kernel_phys_size, _kernel_virt_size, _virt_k
 
 #define MAX_SUPPORTED_MEM_BANKS 10
 
-//this supports a maximum of 4 GiB of mem
+//this supports a maximum of 4 GiB of mem. these pages are guaranteed to be included with the direct map of the kernel as long as the kernel + bitmap size is <= 4Mib; if this is not the case than another page table will need to be statically allocated to be able to map the bitmap pages, because it is most convenient for the bitmap needs to be mapped when initializing the system. this means if the kernel starts at 0xC0200000, the kernel + bitmap must fit in [0xC0200000 - 0xC02800000), or, more generally, VIRT_KERNEL_START + 0x400000
 #define NUM_PAGES_FOR_ALLOC_BITMAP 32
 
 typedef struct {

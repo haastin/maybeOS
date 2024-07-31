@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "data_structures.h"
+#include "driver.h"
 
 //IOAPIC
 #define NUM_IOAPIC_IRQs 24
@@ -28,6 +29,8 @@
 
 #define USER_INTERRUPT_VECTOR_BEGIN 0x20
 
+#define IOAPIC_MMIO_LENGTH 0x20
+
 
 struct IOAPIC ioapic;
 
@@ -46,6 +49,7 @@ void initialize_ioapic(){
     ioapic.IO_Register_Selector = ioapic_desc->physical_base_address;
     ioapic.IO_Window_Register = ioapic_desc->physical_base_address + 0x10;
 
+    init_MMIO_device(ioapic_desc->physical_base_address, IOAPIC_MMIO_LENGTH);
     initialize_irt();
 }
 

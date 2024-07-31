@@ -11,9 +11,10 @@ typedef struct{
 
 #define HEAP_SIZE 20*PAGE_SIZE
 
-void init_heap_alloc_entry(heap_alloc_t *new_heap_entry, size_t size);
+void *kmalloc(size_t requested_size);
 
-void init_kheap(void * heap_start);
+void kfree(void *start_address_for_allocation);
 
+void init_kheap(void *heap_start);
 
 #endif /*__KHEAP_H__*/

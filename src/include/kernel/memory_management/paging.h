@@ -102,15 +102,28 @@
 #define NUM_PAGING_STRUCTURE_ENTRIES_IN_32_BIT_MODE 1024
 #define BYTES_PER_PAGING_ENTRY 4
 
+//recursion is used to get the address of any paging structure for this 32 bit OS to avoid the expense of direct mapping all of phys mem given the tight virtual address space. while technically the kernel's is statically allocated, processes' page dirs won't be, and while their pgd virt addy will liekly be recorded in a data structure, it is safe to map it anyways
+
+//these virtual addresses used are chosen to avoid interfering with hardware or kernel mappings that require particular virtual addresses 
+#define PAGE_DIR_RECURSIVE_VIRT_ADDRESS 0xf0fc3000 //this comes out to entry index 963 of the page tab
+
+//getting a page tab phys address requires accessing the page table firstly, but we don't know what page tab will be referenced, so cannot have hardcoded virtual address for this. the page dir index for the page tab must be found and then ORed with the chosen index to hold a page table's recursive entry, which will also be located at index 963
+#define PAGE_TAB_RECURSIVE_ENTRY_INDEX 0x3c3
+
+//when creating page tables, an initial insertion needs to be made for the recursive mapping. after this, a virtual pointer is no longer needed to reference a page table, so when creating a page table we temporarily point the allocated pageframe for it with this virtual address to insert the recursive entry. This virtual address was chosen because it resides in the higher half of kernel space, but before the loaded image of my kernel, where there is a gap. This ensures it will not be in the virtual address range vmalloc keeps track of, so no dynamic alloc struct is needed to be allocated to keep track of it.  
+#define NEW_PAGE_TAB_TEMP_VIRT_POINTER 0xC0000000
 
 //10 bits to determine PT index; use this after shifting the virtual addy to get to the PT index
 #define PAGE_TAB_INDEX_BITMASK 0x3ff
 
-#define get_PTE_idx(virtual_addy) (((virtual_addy) >> PAGE_TAB_INDEX_BIT_INDEX) & PAGE_TAB_INDEX_BITMASK)
-#define get_PDE_idx(virtual_addy) ((virtual_addy) >> PAGE_DIR_INDEX_BIT_INDEX)
+#define get_PTE_idx(virtual_addy) (((uintptr_t)(virtual_addy) >> PAGE_TAB_INDEX_BIT_INDEX) & PAGE_TAB_INDEX_BITMASK)
+#define get_PDE_idx(virtual_addy) ((uintptr_t)(virtual_addy) >> PAGE_DIR_INDEX_BIT_INDEX)
 
 #define paging_entry_present(paging_entry_val) ((paging_entry_val) & 0x1)
 #define get_pageframe_address(paging_entry_val) ((paging_entry_val) & PAGE_FRAME_BITMASK)
+
+#define get_page_tab_virtual_pointer(pde_idx) (((pde_idx) << PAGE_DIR_INDEX_BIT_INDEX) | (PAGE_TAB_RECURSIVE_ENTRY_INDEX << PAGE_TAB_INDEX_BIT_INDEX))
+
 
 //* END OF x86-Specific DEFINITIONS
 #else
@@ -153,6 +166,12 @@ extern Page_Directory_t kernel_PGD __attribute__((aligned(0x1000)));
 //need two boot page tables since the identity map and mapping the virtual kernel will have two diff page dir indexes
 extern Page_Table_t kernel_identitymap_PT __attribute__((aligned(0x1000)));
 extern Page_Table_t kernel_directmap_PT __attribute__((aligned(0x1000)));
+
+Page_Table_Entry_t *get_pte(void *pgd, unsigned long virtual_address);
+
+bool free_mapping(void *pgd, unsigned long virtual_address);
+
+void create_recursive_mapping(void *pgd, void *phys_address);
 
 bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, size_t flags);
 

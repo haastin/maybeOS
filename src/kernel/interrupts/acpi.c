@@ -64,6 +64,9 @@ struct MultipleAPIC_DescriptionTable * madt;
  * TODO: make my own acpi structures to eventually free the acpi mem?
  */
 void process_acpi_info(struct multiboot_tag_new_acpi * acpi_info_tag){
+
+    //* ACPI addresses were allocated/mapped in init_memory
+
     rsdp = (struct RootSystemDescriptorPointer_2 *) &acpi_info_tag->rsdp;
     rsdt = (struct RootSystemDescriptorTable *) rsdp->rsd1_header.RSDtable_address;
     madt = (struct MultipleAPIC_DescriptionTable *) get_system_descriptor_table(MADT);

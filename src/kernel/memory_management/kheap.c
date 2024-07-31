@@ -11,31 +11,36 @@ void * end;
 
 void * first_open_spot;
 
-void init_heap_alloc_entry(heap_alloc_t * new_heap_entry, size_t size){
+static inline heap_alloc_t * get_next_heap_entry(heap_alloc_t * curr_entry){
+    return (heap_alloc_t *)((char*)curr_entry + curr_entry->size + sizeof(heap_alloc_t));
+} 
+
+static void init_heap_alloc_entry(heap_alloc_t * new_heap_entry, size_t size){
     new_heap_entry->size = size;
     new_heap_entry->used = true;
-}
 
-static inline unsigned long calc_avail_space_from_curr_pos(void * curr_pos){
-    return (unsigned long) (end - curr_pos);
 }
 
 static void * get_more_mem(void){
     //call vmalloc
     //ideally the heap should be able to use any virtual page to give to a process
-     //by default request 2 pages at a time
-    vmalloc(PAGE_SIZE*NUM_PAGES_REQUESTED_WHEN_FULL);
+    //by default request 2 pages at a time
+    vmalloc_request_more_memory(start, PAGE_SIZE*NUM_PAGES_REQUESTED_WHEN_FULL);
     end += NUM_PAGES_REQUESTED_WHEN_FULL*PAGE_SIZE;
 }
 
 static void * goto_first_open_spot(void){
+
+    //iterate through the heap, checking heap entries along the way to see if they are used or not
+
     char * heap = start;
-    heap_alloc_t * heap_entry = (heap_alloc_t*) heap; 
-    while(heap_entry <= end && heap_entry->used == true){
-        size_t mem_used = heap_entry->size + sizeof(heap_alloc_t);
-        heap_entry = (heap_alloc_t *) ((char*) heap_entry + heap_entry->size);
+    heap_alloc_t * heap_entry = (heap_alloc_t*) heap;
+
+    while(heap_entry < end && heap_entry->used == true){
+
+        heap_entry = get_next_heap_entry(heap_entry);
     }
-    if(heap_entry > end){
+    if(heap_entry >= end){
        void * new_adddress = get_more_mem();
        return new_adddress;
     }
@@ -45,16 +50,63 @@ static void * goto_first_open_spot(void){
     
 }
 
+static void * find_first_fit(size_t requested_size){
+    
+    char * heap = first_open_spot;
+    heap_alloc_t * heap_entry = (heap_alloc_t*) heap;
 
-void * kmalloc(size_t requested_size){
-    //traverse to find big enough spot in the avail mem
-    //if no avail spot, call get more mem
-    //intitialize heap entry
-    //return address immediately after heap entry
+    while(heap_entry < end){
+
+        if(heap_entry->used == true){
+            
+            heap_entry = get_next_heap_entry(heap_entry);
+        }
+        else if(heap_entry->size >= requested_size){
+            return heap_entry;
+        }
+    }
+    //this should always be the case if this point is reached
+    if(heap_entry >= end){
+        //keep asking for pages until enough space has been reached
+        void * new_address = get_more_mem();
+        while(end - new_address < requested_size){
+            get_more_mem();
+        }
+       return new_address;
+    }
 }
 
-bool free(void * start_address_for_allocation){
-    //
+
+void * kmalloc(size_t requested_size){
+
+    //traverse to find big enough spot in the avail mem
+    heap_alloc_t * new_heap_entry = find_first_fit(requested_size);
+    //intitialize heap entry
+    init_heap_alloc_entry(new_heap_entry, requested_size);
+
+    heap_alloc_t * next_entry = get_next_heap_entry(new_heap_entry);
+    next_entry->used = false;
+    next_entry->size = ((unsigned long)end - (unsigned long)next_entry);
+
+    //return address immediately after heap entry
+    return (char*)new_heap_entry + sizeof(heap_alloc_t);
+}
+
+void kfree(void * start_address_for_allocation){
+
+    heap_alloc_t * free_entry = start_address_for_allocation;
+    free_entry->used = false;
+    
+     //TODO: for now, can only merge with free blocks after it. this would be much cleaner with true OO code. get C++ up at some point
+    heap_alloc_t * next_entry = get_next_heap_entry(free_entry);
+
+    if(next_entry->used == false){
+        free_entry->size += next_entry->size;
+    }
+    
+    if(first_open_spot > start_address_for_allocation){
+        first_open_spot = start_address_for_allocation - sizeof(heap_alloc_t);
+    }
 }
 
 void init_kheap(void * heap_start){
@@ -62,14 +114,8 @@ void init_kheap(void * heap_start){
     //at the start, the heap is only given one page, this will change once the vmm and kheap are initialized
     start = heap_start;
     end = start + HEAP_SIZE;
-
-    //request the rest of the pages allocated for the heap after getting the first (kmalloc can now be used)
-    bool allocated = vmalloc_request_virtual_pages(end, HEAP_SIZE-PAGE_SIZE);
-    if(allocated){
-        end +=  (HEAP_SIZE - PAGE_SIZE);
-        first_open_spot = goto_first_open_spot(); 
-    }
-    else{
-        //TODO: printk error here
-    }
+    first_open_spot = start;
+    heap_alloc_t * first_heap_entry = (heap_alloc_t *) start;
+    first_heap_entry->used = false;
+    first_heap_entry->size = end-start;
 }
