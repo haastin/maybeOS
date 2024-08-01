@@ -67,7 +67,7 @@ void init_memory(struct multiboot_tag_mmap *mmap_tag){
     vmm_init_kheap();
 
     //can only init after the mm system is setup
-    //init_MMIO_device(acpi_entry->addr, acpi_entry->len);
+    init_MMIO_device(acpi_entry->addr, acpi_entry->len);
 }
 
 bool is_page_usable(unsigned long pageframe_address){
