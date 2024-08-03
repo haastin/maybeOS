@@ -30,6 +30,32 @@ char * strncpy(char * restrict s1, const char* restrict s2, size_t n){
     return s1;
 }
 
+//concat section
+
+void * strcat(char * restrict s1, char * restrict s2){
+    size_t s1_end = strlen(s1)-1;
+    size_t s2_len = strlen(s2);
+    for(size_t idx=0; idx<s2_len; idx++){
+        if(s2[idx] == '\0'){
+            break;
+        }
+        s1[s1_end + idx] = s2[idx];
+    }
+    return s1;
+}
+
+void * strncat(char * restrict s1, char * restrict s2, size_t n){
+    size_t s1_end = strlen(s1)-1;
+    for(size_t idx=0; idx<n; idx++){
+        if(s2[idx] == '\0'){
+            break;
+        }
+        s1[s1_end + idx] = s2[idx];
+    }
+    s1[s1_end + n] = '\0';
+    return s1;
+}
+
 //comparison section of ISO C defintion of string.h
 
 int strcmp(const char* s1, const char* s2){

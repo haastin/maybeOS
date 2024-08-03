@@ -11,7 +11,7 @@ typedef struct{
 
 #define HEAP_SIZE 20*PAGE_SIZE
 
-void *kmalloc(size_t requested_size);
+void * kmalloc(size_t requested_size);
 
 void kfree(void *start_address_for_allocation);
 

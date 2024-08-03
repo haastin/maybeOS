@@ -3,6 +3,8 @@
 #include "lapic.h"
 #include "asm_helpers.h"
 #include <stddef.h>
+#include "utils.h"
+#include "serial.h"
 
 #define DIVIDE_ERROR 0
 #define DOUBLE_FAULT 8
@@ -10,6 +12,12 @@
 
 #define TIMER_IRQ 0x20
 #define KEYBOARD_IRQ 0x21
+
+#define DUMMY_ERROR_CODE 0xDEADBEEF
+
+//16 possible digits + prefix and null terminator
+#define MAX_HEX_ADDRESS_STR_LEN  19 
+#define MAX_MESSAGE_SIZE 1024
 
 /**
  * Although the process context may differ depending on if the interrupt was triggered in userspace vs kernelspace, we treat it like it doesn't matter, as the only difference is the usermode ESP and SS pushed to the stack, which won't be used by a handler anyways
@@ -39,32 +47,54 @@ struct process_context_t {
 };
 
 
-static void vector_0_handler(void){
-    set_background_color(BLUE);
+static void dump_state(struct process_context_t * process_frame){
+    char eip_str[MAX_HEX_ADDRESS_STR_LEN];
+    num_to_hex_string(process_frame->iret_eip, eip_str);
+    char eflags_str[MAX_HEX_ADDRESS_STR_LEN];
+    num_to_hex_string(process_frame->iret_eflags, eflags_str);
+    char vec_num[MAX_HEX_ADDRESS_STR_LEN];
+    num_to_hex_string(process_frame->vector_num,vec_num);
+
+    char eip_msg[MAX_MESSAGE_SIZE];
+    char eflags_msg[MAX_MESSAGE_SIZE];
+    char vec_msg[MAX_MESSAGE_SIZE];
+
+    char * newline = "\n";
+
+    strcat(strcat(strcat(eip_msg, "EIP: "), eip_str), newline);
+    strcat(strcat(strcat(eflags_msg, "Eflags: "), eflags_str), newline);
+    strcat(strcat(strcat(vec_msg, "Interrupt Vector: "), vec_num), newline);
+
+    char full_msg[MAX_MESSAGE_SIZE]; 
+    strcat(strcat(strcat(full_msg, eip_msg), eflags_msg), vec_msg);
+
+    if(process_frame->error_code != DUMMY_ERROR_CODE){
+        
+        char error_code[MAX_HEX_ADDRESS_STR_LEN]; 
+        num_to_hex_string(process_frame->error_code, error_code);
+        
+        char error[MAX_MESSAGE_SIZE];
+        strcat(strcat(strcat(error, "Error code: "), error_code), newline);
+
+        strcat(full_msg, error); 
+    }
+    //TODO: dump regs, stack? need better formatting funcs to make this easier
+    
+    send_string_to_serial_port(full_msg);
 }
 
 
 uint32_t interrupt_handler_dispatcher(struct process_context_t * process_frame){
     
     switch(process_frame->vector_num){
-        case DIVIDE_ERROR:
-            vector_0_handler();
-            break;
-        case DOUBLE_FAULT:
-            set_background_color(GREEN);
-            break;
-        case GENERAL_PROTECTION_EXCEPTION:
-            set_background_color(RED);
-            break;
-        case TIMER_IRQ:
-            set_background_color(MAGENTA);
-            break;
         case KEYBOARD_IRQ:
             uint8_t resp1 = readb_from_keyboard();
             handle_kbd_irq(resp1);
             break;
-
-        
+        default:
+            set_background_color(RED);
+            dump_state(process_frame);
+            break;
     }
     write_EOI();
     return process_frame;

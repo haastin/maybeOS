@@ -32,4 +32,6 @@ extern unsigned int _kernel_vm_offset;
 
 // unsigned char recvb_fromport(unsigned short port);
 
+char * num_to_hex_string(unsigned long num, void * buff);
+
 #endif /*__UTILS_H__*/

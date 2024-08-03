@@ -50,7 +50,7 @@ static void init_idt(void){
     asm volatile("lidt %0\n" :: "m" (idtr));
 }
 
-static void store_multiboot2_bootinfo(uint32_t multiboot2_bootinfo_startaddress){
+static void process_multiboot2_bootinfo(uint32_t multiboot2_bootinfo_startaddress){
 
     //this loop logic is from GRUB's multiboot2 example code, slightly modified to improve readability
     for(struct multiboot_tag *tag = (struct multiboot_tag *)((char*)multiboot2_bootinfo_startaddress + 8);
@@ -84,18 +84,22 @@ void initialize_interrupts(void){
 
 void initialize_peripheral_devices(void){
     initialize_ps2keyboard();
+    bool res = init_serial_port();
+    if(!res){
+        //TODO: throw some error?
+    }
 }
 
-void initialize_mm(void){
-}
 
 void kernel_start(uint32_t multiboot2_bootinfo_startaddress){
     
     //at this point the GDT is initialized and paging is enabled
     
-    store_multiboot2_bootinfo(multiboot2_bootinfo_startaddress);
-    initialize_mm();
+    process_multiboot2_bootinfo(multiboot2_bootinfo_startaddress);
+    
     initialize_interrupts();
     initialize_peripheral_devices();
+
+    //this will not return
     start_shell();
 }
