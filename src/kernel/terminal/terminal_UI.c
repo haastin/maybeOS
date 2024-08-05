@@ -4,12 +4,9 @@
 
 /*This file is meant to manage the UI for a terminal*/
 
-//at some point would like to clean up the UI and not have the entire screen be treated as a terminal; as part of that would like to have some nice spacing, etc as seen below
-// #define TERMINAL_SIDE_GAP_SIZE 1
-// #define TERMINAL_TOP_AND_BOT_GAP_SIZE 5
+//TODO: this is prob the wrong structure to have for a terminal. would like to get a true copy of a tty subsystem at some point. For now, terminal UI stuff is really sprinkled into the VGA driver, and this will just make calls to those funcs that the VGA driver offers
 
-
-static char * terminal_prompt_msg = "maybeOS > ";
+static const char * terminal_prompt_msg = "maybeOS > ";
 
 void start_shell(){
     set_background_color(GRAY);

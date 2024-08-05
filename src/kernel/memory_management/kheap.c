@@ -57,12 +57,18 @@ static void * find_first_fit(size_t requested_size){
 
     while(heap_entry < end){
 
+        //if used
         if(heap_entry->used == true){
             
             heap_entry = get_next_heap_entry(heap_entry);
         }
+        //if open and big enough
         else if(heap_entry->size >= requested_size){
             return heap_entry;
+        }
+        //if open but not big enough, keep going
+        else{
+            heap_entry = get_next_heap_entry(heap_entry);
         }
     }
     //this should always be the case if this point is reached
@@ -84,9 +90,12 @@ void * kmalloc(size_t requested_size){
     //intitialize heap entry
     init_heap_alloc_entry(new_heap_entry, requested_size);
 
+    //if this is a fresh page, it will be zeroed out, so we need to make sure to create a heap entry is needed
     heap_alloc_t * next_entry = get_next_heap_entry(new_heap_entry);
     next_entry->used = false;
     next_entry->size = ((unsigned long)end - (unsigned long)next_entry);
+
+    first_open_spot = goto_first_open_spot();
 
     //return address immediately after heap entry
     return (char*)new_heap_entry + sizeof(heap_alloc_t);

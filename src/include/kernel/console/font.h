@@ -50,8 +50,8 @@ typedef struct{
 } Font;
 
 void initialize_font(Font_Name, Font*);
-void set_font(Font_Name font_name);
+void set_font(Font_Name font_name, Font * font);
 
-bool isCharBit(unsigned char *char_bitmap, unsigned char bits_shifted);
+bool isCharBit(unsigned char *char_bitmap, unsigned char bits_shifted, Font * font);
 
 #endif /*__FONT_H__*/

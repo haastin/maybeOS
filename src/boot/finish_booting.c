@@ -24,8 +24,6 @@
 #define ALIGN_TO_8_BYTES(tag_size) ((tag_size + 7) & ~7)
 
 
-
-
 __attribute__((aligned(8)))struct gate_descriptor_32bit idt[NUM_SUPPORTED_INTERRUPTS];
 
 //we will use a Protected Flat Model, as described in Intel's docs
@@ -75,7 +73,6 @@ static void process_multiboot2_bootinfo(uint32_t multiboot2_bootinfo_startaddres
 }
 
 void initialize_interrupts(void){
-    init_idt();
     initialize_lapic();
     initialize_ioapic();
     asm volatile("sti\n");
@@ -94,10 +91,17 @@ void initialize_peripheral_devices(void){
 void kernel_start(uint32_t multiboot2_bootinfo_startaddress){
     
     //at this point the GDT is initialized and paging is enabled
-    
+
+    //get the IDT up ASAP so exceptions can be caught as early as possible
+    init_idt();
+
+    //initializes the mm system and the framebuffer driver
     process_multiboot2_bootinfo(multiboot2_bootinfo_startaddress);
-    
+
+    //initializes lapic, apic, and enables interrs
     initialize_interrupts();
+
+    //enables keyboard
     initialize_peripheral_devices();
 
     //this will not return

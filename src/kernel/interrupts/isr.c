@@ -92,8 +92,8 @@ uint32_t interrupt_handler_dispatcher(struct process_context_t * process_frame){
             handle_kbd_irq(resp1);
             break;
         default:
-            set_background_color(RED);
             dump_state(process_frame);
+            asm volatile ("cli;\nhlt;");
             break;
     }
     write_EOI();
