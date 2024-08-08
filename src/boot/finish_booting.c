@@ -104,6 +104,8 @@ void kernel_start(uint32_t multiboot2_bootinfo_startaddress){
     //enables keyboard
     initialize_peripheral_devices();
 
+    init_terminal_subsystem();
+
     //this will not return
     start_shell();
 }

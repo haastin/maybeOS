@@ -34,4 +34,6 @@ extern unsigned int _kernel_vm_offset;
 
 char * num_to_hex_string(unsigned long num, void * buff);
 
+bool isInArray(const void *array, int c, size_t array_len);
+
 #endif /*__UTILS_H__*/

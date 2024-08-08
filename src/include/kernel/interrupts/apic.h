@@ -36,6 +36,6 @@ struct IOAPIC {
 
 uint32_t read_ioapic_reg(uint8_t reg_num);
 
-void initialize_interrupt_source_overrides(void);
+void initialize_ioapic();
 
 #endif /*__APIC_H__*/

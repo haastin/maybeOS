@@ -3,6 +3,8 @@
 #include "ps2.h"
 #include <stdbool.h>
 #include "keycodes.h"
+#include "terminal_input_parser.h"
+#include "utils.h"
 
 /**
  * Commands to the keyboard 
@@ -15,10 +17,24 @@
 /**
  * Commands to the keyboard controller
  */
+#define KBD_ACK_RESP 0xFA
+#define KBD_ECHO_RESP 0xEE
+//dont think there's a diff between an error of 00 and FF, but idk
+#define KBD_ERROR_00_RESP 0x00
+#define KBD_ERROR_FF_RESP 0xFF
+#define KBD_SELF_TEST_PASS_RESP 0xAA
+#define KBD_INTERFACE_TEST_RESP 0xAB
+#define KBD_MOUSE_INTERFACE_TEST_RESP 0xA9
 
-#define KBD_CONT_SELF_TEST_CMD 0xAA
-#define KBD_CONT_KBD_INTERFACE_TEST_CMD 0xAB
-#define KBD_CONT_MOUSE_INTERFACE_TEST_CMD 0xA9
+const char utility_scancodes[] = {
+    KBD_ACK_RESP,
+    KBD_ECHO_RESP,
+    KBD_ERROR_00_RESP,
+    KBD_ERROR_FF_RESP,
+    KBD_SELF_TEST_PASS_RESP,
+    KBD_INTERFACE_TEST_RESP,
+    KBD_MOUSE_INTERFACE_TEST_RESP,
+};
 
 /**
  * Keyboard Controller Control Register Layout
@@ -69,27 +85,41 @@ static const unsigned short ps2_set2_keycode[256] = {
     [0x36] = KEY_6_AND_CARET,
     [0x3D] = KEY_7_AND_AMPERSAND,
     [0x3E] = KEY_8_AND_ASTERISK,
-    [0x46] = KEY_9_AND_LEFT_PAREN,
-    [0x66] = KEY_DELETE_BACKSPACE,
-
-    //TODO: add other keys here that are missing, like colon/semicolon, quote/apostrophe, etc
-
+    [0x46] = KEY_9_AND_LEFT_PAREN,    
     [0x29] = KEY_SPACEBAR,
 
     //on 2020 Mac, left side
+
     [0x0D] = KEY_TAB,
     [0x58] = KEY_CAPS_LOCK,
     [0x12] = KEY_L_SHIFT,
     [0x14] = KEY_L_CTRL,
     [0x1F] = KEY_L_GUI,
-    [0x11] = KEY_L_ALT, 
+    [0x11] = KEY_L_ALT,
+    [0x76] = KEY_ESCAPE,
+    [0x0E] = KEY_GRAVE_ACCENT_TILDE,
+
 
     //on 2020 Mac, right side
+
     [0x59] = KEY_R_SHIFT,
-    
     [0x27] = KEY_R_GUI,
     
-    [0x76] = KEY_ESCAPE,
+    [0x41] = KEY_COMMA_LESS_THAN,
+    [0x49] = KEY_PERIOD_GREATER_THAN,
+    [0x4A] = KEY_SLASH_QUESTION,
+    [0x4C] = KEY_SEMICOLON_COLON,
+    [0x52] = KEY_APOSTROPHE_QUOTE,
+    [0x54] = KEY_LEFT_BRACKET,
+    [0x5B] = KEY_RIGHT_BRACKET,
+    [0x5D] = KEY_BACKSLASH_AND_PIPE, 
+    [0x4E] = KEY_MINUS_UNDERSCORE, 
+    [0x55] = KEY_EQUAL_PLUS, 
+    [0x66] = KEY_DELETE_BACKSPACE,
+    [0x5A] = KEY_RETURN_ENTER, 
+
+    //not sure about these below
+    //[0x32] = KEY_NON_US_HASH_TILDE,
     [0x05] = KEY_F1,
     [0x06] = KEY_F2,
     [0x04] = KEY_F3,
@@ -105,13 +135,12 @@ static const unsigned short ps2_set2_keycode[256] = {
     //[0x12] = KEY_PRINT_SCREEN, can't handle this key w/ my driver logic
     [0x7E] = KEY_SCROLL_LOCK,
     [0xE1] = KEY_PAUSE,
-    
     [0x77] = KEY_NUM_LOCK_AND_CLEAR,
-    [0x4A] = KEY_KEYPAD_SLASH,
+    //[0x4A] = KEY_KEYPAD_SLASH,
     [0x7C] = KEY_KEYPAD_ASTERISK,
     [0x7B] = KEY_KEYPAD_MINUS,
     [0x79] = KEY_KEYPAD_PLUS,
-    [0x5A] = KEY_KEYPAD_ENTER,
+    //[0x5A] = KEY_KEYPAD_ENTER,
     [0x69] = KEY_KEYPAD_1_AND_END,
     [0x72] = KEY_KEYPAD_2_AND_DOWN_ARROW,
     [0x7A] = KEY_KEYPAD_3_AND_PAGE_DOWN,
@@ -128,13 +157,13 @@ static const unsigned short ps2_set2_keycode[256] = {
 
 /**
  * Index into this table when a makecode prefix is detected
- * *size of 0x80 is specified since highest scancode index val goes into 0x70s, so this save space instead of just specifying 0xff. hashmap would still be better.
+ * TODO: size of 0x80 is specified since highest scancode index val goes into 0x70s, so this save space instead of just specifying 0xff. hashmap would still be better.
  */
 static const unsigned short ps2_set2_prefixed_keycodes[0x80]= {
     [0x14] = KEY_R_CTRL, 
     [0x11] = KEY_R_ALT, 
     //[0x2F] = KEY_APPS,
-    [0x5A] = KEY_RETURN_ENTER, 
+    
     [0x70] = KEY_INSERT,
     [0x6C] = KEY_HOME, 
     [0x7D] = KEY_PAGE_UP, 
@@ -160,13 +189,7 @@ static bool bufferedBreakCodePrefix;
 
 static inline bool out_buff_full();
 static inline bool in_buff_full();
-static unsigned short set2_scancode_to_keycode(uint8_t scancode);
 void deliver_keycode(unsigned short scancode);
-static bool isCompleteKeycode(uint8_t scancode);
-static bool isUtilityKeycode(unsigned short keycode, uint8_t scancode);
-static void handle_utility_keycode(uint8_t scancode);
-static bool isBreakCode(uint8_t scancode);
-static bool modifiesFutureScancode(uint8_t scancode);
 static inline void send_kbd_controller_cmd(uint8_t cmd);
 
 unsigned char get_scancode_set_version(){
@@ -263,7 +286,7 @@ void initialize_ps2keyboard(void){
 bool controller_self_test(void){
     //save and rewrite control reg val just in case the self test resets the keyboard (tutorial recommends)
     uint8_t curr_control_reg = read_kbd_cntl_control_reg();
-    send_kbd_controller_cmd(KBD_CONT_SELF_TEST_CMD);
+    send_kbd_controller_cmd(KBD_SELF_TEST_PASS_RESP);
     write_kbd_ctl_control_reg(curr_control_reg);
     uint8_t kbd_cont_response = readb_from_keyboard();
     if (kbd_cont_response == 0x55){
@@ -303,11 +326,11 @@ unsigned char test_kbd_cont_interfaces(bool multiple_interfaces){
     
     uint8_t mouse_res = -1; //assume only one port
 
-    send_kbd_controller_cmd(KBD_CONT_KBD_INTERFACE_TEST_CMD);
+    send_kbd_controller_cmd(KBD_INTERFACE_TEST_RESP);
     uint8_t kbd_res = readb_from_keyboard();
     
     if(multiple_interfaces){
-    send_kbd_controller_cmd(KBD_CONT_MOUSE_INTERFACE_TEST_CMD);
+    send_kbd_controller_cmd(KBD_MOUSE_INTERFACE_TEST_RESP);
     mouse_res = readb_from_keyboard();
     }
 
@@ -358,43 +381,6 @@ void enable_interrupt_ports(unsigned char avail_interfaces_code){
     write_kbd_ctl_control_reg(kbd_ctl_reg);
 }
 
-//TODO: in case I decide to store each byte of a scancode in the future
-// void place_scancode_in_buff(uint8_t scancode){
-    
-//     scancode_buff[scancode_buff_curr_index % RECEIVED_SCANCODE_BUFFER_SIZE] = scancode;
-//     scancode_buff_curr_index++;   
-// }
-
-void handle_kbd_irq(uint8_t scancode){
-
-    unsigned short keycode = set2_scancode_to_keycode(scancode);
-
-    //scancode is meant for the driver
-    if(isUtilityKeycode(keycode, scancode)){
-        handle_utility_keycode(keycode);
-    }
-    //a multibyte scancode
-    else if(!isCompleteKeycode(scancode)){
-        if(isBreakCode(scancode)){
-            bufferedBreakCodePrefix = true;
-        }
-        else{
-            bufferedPrefix = true;
-        }
-    }
-    else{
-        bufferedBreakCodePrefix = false;
-        bufferedPrefix = false;
-
-        if(bufferedBreakCodePrefix){
-            //do nothing for a break code
-        }
-        else{
-            deliver_keycode(keycode);
-        }
-    }
-}
-
 static inline unsigned short set2_scancode_to_keycode(uint8_t scancode){
     unsigned short res_keycode;
     if(bufferedPrefix){
@@ -407,10 +393,9 @@ static inline unsigned short set2_scancode_to_keycode(uint8_t scancode){
     return res_keycode;
 }
 
-void deliver_keycode(unsigned short scancode){
-    
+static inline bool isBreakCode(uint8_t scancode){
+    return scancode == PS_SET2_SCANCODE_PREFIX_2 ? true : false;
 }
-
 
 /**
  * * This func works for every key besides print screen (ie all other keys end after one of the two prefixes)
@@ -422,15 +407,44 @@ static inline bool isCompleteKeycode(uint8_t scancode){
     return true;
 }
 
-static bool isUtilityKeycode(unsigned short keycode, uint8_t scancode){
+static bool isUtilityKeycode(uint8_t scancode){
     //if scancode val corresponds to ack, echo, etc.
-    return false;
+    return isInArray(&utility_scancodes, scancode, (size_t) sizeof(utility_scancodes));
 }
 
 static void handle_utility_keycode(uint8_t scancode){
     return;
 }
 
-static inline bool isBreakCode(uint8_t scancode){
-    return scancode == PS_SET2_SCANCODE_PREFIX_2 ? true : false;
+void handle_kbd_irq(uint8_t scancode){
+
+    unsigned short keycode = set2_scancode_to_keycode(scancode);
+
+    //scancode is meant for the driver
+    if(isUtilityKeycode(scancode)){
+        handle_utility_keycode(scancode);
+    }
+    //a multibyte scancode
+    else if(!isCompleteKeycode(scancode)){
+        if(isBreakCode(scancode)){
+            bufferedBreakCodePrefix = true;
+
+            //any char that is a prefix but not a break code will not have a breakcode prefix after it, so now we can confirm this is a specific case of a breakcode prefix
+            bufferedPrefix = false;
+        }
+        else{
+            bufferedPrefix = true;
+        }
+    }
+    else{
+        //TODO: need to handle special keys where \xE0 may not be followed by \xF0, but by another keycode, AND this keycode may not be the final keycode for the complete Make scancode sequence to indicate a particular key. For now I will ignore it because it applies to keys not used in a terminal
+        // if(bufferedPrefix && potentially_more_bytes_in_full_scancode_seq_for_key){
+            
+        // }
+        
+        handle_keycode(keycode, bufferedBreakCodePrefix);
+        
+        bufferedBreakCodePrefix = false;
+        bufferedPrefix = false;
+    }
 }

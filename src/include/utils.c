@@ -42,3 +42,7 @@ char * num_to_hex_string(unsigned long num, void * buff){
     }
     return res_num;
 }
+
+bool isInArray(const void * array, int c, size_t array_len){
+    return memchr(array, c, array_len) == NULL ? false : true;
+}

@@ -91,7 +91,7 @@ void initialize_lapic(){
     if(have_lapic){
         struct IA32_APIC_MSR lapic_msr = get_lapic_msr(IA32_LAPIC_MSR_NUM);
         lapic_base_address = (volatile uint32_t *)(lapic_msr.LAPIC_base_inunitsofpages << 12);
-
+        lapic = (LAPIC_Registers *) lapic_base_address;
         init_MMIO_device(lapic_base_address, LAPIC_MMIO_LENGTH);
         disable_pic();
         enable_lapic();

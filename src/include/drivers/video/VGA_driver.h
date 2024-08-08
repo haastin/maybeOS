@@ -7,8 +7,9 @@
 
 struct framebuffer{
     uint8_t * starting_address;
-    uint32_t width;
-    uint32_t height;
+    unsigned int width;
+    unsigned int height;
+    unsigned long pitch;
     struct Pixel{
         uint8_t total_bits;
         uint8_t num_red_bits;
@@ -55,43 +56,39 @@ typedef struct {
     uint8_t blue;
 } __attribute__((packed)) Pixel_t;
 
-typedef struct terminal{
-
-    //--- bounds of the terminal---
-    unsigned int left_boundary_x;
-    unsigned int right_boundary_x;
-    unsigned int top_boundary_y;
-    unsigned int bottom_boundary_y;
-
-    unsigned int num_rows;
-    unsigned int num_cols;
-    
-    Font font;
-
-    Color background_color;
-    Color cursor_color;
-    Color font_color;
-
-    /**
-     * A terminal is logically divided into "text cells". There are no data structures that implement this explicitly, as the amount of mem needed to support it is excessive. A text cell is the bitmap for the current terminal's font size. The default terminal font is 8x16 pixels, so a bitmap, and thus a text cell, is made up of 2D array of pixels like so: Pixel_t text_cell[8][16]. So, when printing in text mode, the cursor will point to the top left pixel of the text cell, and the address of each pixel afterwards is calculated, as opposed to having a data structure to directly access it, as I mentioned before. 
-     * 
-     * A terminal's boundaries may not fit a whole number of text cells. Regardless, text cells will ALWAYS start from the first possible pixel on the left side of the terminal and the max possible amount of text cells will be accessed sequentially from the left. The pixels remaining after the last possible text cell in a row will only be accounted for when moving the cursor left, and the extra pixels remaining in the columns at the bottom of the terminal will never need to be interacted in the current framebuffer API
-     */
-    Pixel_t * start;
-    Pixel_t * text_cursor;
-
-} terminal_t;
-
 extern struct framebuffer framebuffer;
-extern terminal_t * terminal;
 
-void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info); 
+void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info);
+void set_background_color(Color background); 
 
-void terminal_putchar(const uint32_t unicode_character_index, const Color char_color, const Color background_color);
-void terminal_printstr(const char *string, size_t num_chars);
-void set_background_color(Color background);
+void * calc_fb_addy_from_pix_vals(unsigned int x, unsigned int y);
+
+//functions pertaining to moving throughout the terminal in "text mode"
+uint8_t * decrement_text_row(uint8_t * start);
+uint8_t *advance_text_row(uint8_t *start);
+uint8_t *advance_x_text_rows(uint8_t *start, unsigned int row);
+unsigned int get_pixel_term_text_row(Pixel_t *pix);
+unsigned int get_pixel_term_text_col(Pixel_t *row_start, Pixel_t *pix);
+uint8_t *get_pix_row_start(Pixel_t *pix);
+
+//the API used in "text mode" to print to the current location of the text cursor
+void print_char(const uint32_t unicode_character_index, const Color char_color, const Color background_color);
+void print_str(const char *string, size_t num_chars);
+
+//rendering and unrendering the cursor must often be done seperately from printing
+void unplot_text_cursor(char char_at_cursor_loc);
+void plot_text_cursor(char char_at_cursor_loc);
+
+//for when a cell needs to be cleared of its current char to just match the background
+void clear_x_cells_at(uint8_t * location, unsigned long x);
+void clear_x_cells(unsigned long x);
+
+//move the text cursor to the start of the line after it (or the start of the same line if the text cursor is in the last row of the terminal)
+bool move_textCursor_to_new_line_start(void);
+
+//operations to move the current location of the text cursor
 bool inc_textCursor(void);
 bool dec_textCursor(void);
-
+bool inc_textCursor_x_times(unsigned int x);
 
 #endif /*__VGA_DRIVER_H__*/

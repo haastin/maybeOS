@@ -1,6 +1,8 @@
 #include "string.h"
 #include <stdint.h>
 
+//copying functions
+
 void * memcpy(void* dest_buffer, const void* src_buffer, size_t num_bytes_to_copy){
     uint8_t * dest = (uint8_t *) dest_buffer;
     const uint8_t * src = (uint8_t *) src_buffer;
@@ -10,6 +12,34 @@ void * memcpy(void* dest_buffer, const void* src_buffer, size_t num_bytes_to_cop
     }
 
     return dest_buffer;
+}
+
+void * memmove(void * dest, const void *src, size_t n){
+    unsigned char * dest_p = (unsigned char *) dest;
+    const unsigned char * src_p = (const unsigned char *) src;
+
+    //the second way to perform this in the else will work no matter what but is slightly less efficient, so see if the first can be used if poss
+
+    //if the destination buffer starts before the source buffer, the source buffer will succesfully copy all of its data to the dest even if it itself gets overwritten
+    if(dest < src){
+        while(n--){
+            *dest_p = *src_p;
+            dest_p++;
+            src_p++;
+        }
+    }
+    //if the dest buff starts after the source and they overlap, then its possible the source buff could start coping data already written to the dest buff, which inadvertently overwrote itself, and so would then be re-copying bytes it already copied earlier. because of this, we start from the end of the source buff and dest buff and copy backwards so that source buff will have already written its bytes that overlap with the dest buff before those start getting overwritten
+    else{
+        dest_p += n;
+        src_p += n;
+        while(n--){
+            dest_p--;
+            src_p--;
+            *dest_p = *src_p; 
+        }
+    }
+
+    return dest;
 }
 
 char * strcpy(char* restrict s1, const char* restrict s2){
@@ -102,6 +132,5 @@ size_t strlen(const char * s){
     while(s[s_idx] != '\0'){
         s_idx++;
     }
-    size_t res = s_idx + 1;
-    return res;
+    return s_idx;
 }

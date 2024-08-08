@@ -1,10 +1,12 @@
-#include "VGA_driver.h"
+
 #include <stddef.h>
 #include <stdbool.h>
 #include "font.h"
 #include "string.h"
 #include "driver.h"
 #include "vmm.h"
+#include "VGA_driver.h"
+#include "terminal.h"
 
 //holds info about framebuffer
 struct framebuffer framebuffer;
@@ -16,10 +18,7 @@ Pixel_t * fb_pixel_map;
 unsigned int global_cursorX;
 unsigned int global_cursorY;
 
-//TODO: should be curr window
-//the current terminal being written
-terminal_t * terminal;
-
+//TODO: should be a window class 
 
 void set_pixel_RGB(uint8_t * pixel_color_address, Color pixel_color){
     
@@ -38,7 +37,7 @@ static inline unsigned char* get_char_font_bitmap_start(uint32_t unicode_charact
 }
 
 //calc address from the fb start using pixel values
-static inline void * calc_fb_addy_from_pix_vals(unsigned int x, unsigned int y){
+void * calc_fb_addy_from_pix_vals(unsigned int x, unsigned int y){
     return fb_pixel_map + (framebuffer.width*y + x);
 }
 
@@ -47,45 +46,44 @@ static inline uint8_t * advance_fb_row(uint8_t * start){
     return start + framebuffer.width*framebuffer.pixel.pixel_size;
 }
 
+uint8_t * decrement_text_row(uint8_t * start){
+    size_t num_bytes_in_fb_row = framebuffer.pixel.pixel_size*framebuffer.width;
+    size_t num_bytes_in_text_buff_row = num_bytes_in_fb_row*terminal->font.height;
+    return start - num_bytes_in_text_buff_row;
+}
+
 //advance the number of pixel rows in the current terminal font from a designated start
-static inline uint8_t * advance_text_row(uint8_t * start){
+uint8_t * advance_text_row(uint8_t * start){
     size_t num_bytes_in_fb_row = framebuffer.pixel.pixel_size*framebuffer.width;
     size_t num_bytes_in_text_buff_row = num_bytes_in_fb_row*terminal->font.height;
     return start + num_bytes_in_text_buff_row;
 }
 
-static inline uint8_t * advance_x_text_rows(uint8_t * start, unsigned int row){
+uint8_t * advance_x_text_rows(uint8_t * start, unsigned int row){
     //could just use a for loop with advance_fb_row, but i think this is more efficient
     size_t num_bytes_in_fb_row = framebuffer.pixel.pixel_size*framebuffer.width;
     size_t num_bytes_in_text_buff_row = num_bytes_in_fb_row*terminal->font.height;
     return start + num_bytes_in_text_buff_row*row;
 }
 
-//these two functions calculate the pixels remaining at the end of a row or column in the terminal which aren't enough in number to create another text cell in the row/col, but still need to be accounted for in various operations
-static inline unsigned char get_term_row_overflow_pix_count(void){
-    return (terminal->right_boundary_x - terminal->left_boundary_x) % terminal->font.width;
-}
-
-static inline unsigned char get_term_col_overflow_pix_count(void){
-    return (terminal->bottom_boundary_y - terminal->top_boundary_y) % terminal->font.height;
-}
-
-//TODO: could the efficiency of these funcs below be improved?
 //because the text cursor is only kept track of through a pointer, it isn't immediately clear what row or column the text cell that the cursor points to occupies, so some getters are made to accomplish that
-static unsigned int get_pixel_term_text_row(Pixel_t * pix){
-    size_t num_bytes_in_fb_row = framebuffer.pixel.pixel_size*framebuffer.width;
-    size_t num_bytes_in_text_buff_row = num_bytes_in_fb_row*terminal->font.height;
-    return (pix-terminal->start)/num_bytes_in_text_buff_row;
+unsigned int get_pixel_term_text_row(Pixel_t * pix){
+    size_t total_pixels_in_text_buff_row = framebuffer.width*terminal->font.height;
+    return (pix-terminal->start)/total_pixels_in_text_buff_row;
 }
 //col depends on where the row starts
-static unsigned int get_pixel_term_text_col(Pixel_t * row_start, Pixel_t * pix){
+unsigned int get_pixel_term_text_col(Pixel_t * row_start, Pixel_t * pix){
     return (pix-row_start)/terminal->font.width;
+}
+
+uint8_t * get_pix_row_start(Pixel_t * pix){
+    return advance_x_text_rows(terminal->start, get_pixel_term_text_row(pix));
 }
 
 /**
  * Each bit in a bitmap represents an entire pixel, which in my QEMU VM is 3 bytes per pixel, so iteratign through each bit in a bitmap needs to advance the pointer by num bytes per pixel
  */
-void terminal_putchar(const uint32_t unicode_character_index, const Color char_color, const Color background_color){
+void print_char(const uint32_t unicode_character_index, const Color char_color, const Color background_color){
 
     //the bitmap for the char index passed
     unsigned char* char_glyph = get_char_font_bitmap_start(unicode_character_index);
@@ -139,16 +137,46 @@ void set_background_color(Color new_background){
     }
 }
 
-void plot_text_cursor(void){
-    terminal_putchar(0, DONT_SET, terminal->cursor_color);
+void unplot_text_cursor(char char_at_cursor_loc){
+    print_char(char_at_cursor_loc, DONT_SET, terminal->background_color);
 }
 
-static void set_row_color(uint8_t * row){
-    uint8_t * temp = terminal->text_cursor;
-    terminal->text_cursor = row;
-    for(size_t col_idx=0; col_idx<terminal->num_cols; col_idx++){
-        terminal_putchar(0, DONT_SET, terminal->background_color);
+void plot_text_cursor(char char_at_cursor_loc){
+    print_char(char_at_cursor_loc, DONT_SET, terminal->cursor_color);
+}
+
+void clear_x_cells(unsigned long x){
+
+    Pixel_t * temp = terminal->text_cursor;
+    
+    for(size_t col_idx=0; col_idx< x; col_idx++){
+        
+        print_char(0, terminal->background_color, terminal->background_color);
+        
+        //after setting the last text cell to the bg color, don't increment the cursor, because in the case where we clear all cells in the very bottom of the terminal, inc_textCursor will trigger the whole process of moving the terminal lines up again, which calls this again, in an infinite loop. we don't actually care about the pos of the cursor after this since it is being reset to its OG value, so it doesnt hurt to not increment after clearing the last cell
+        if(col_idx != x-1){
+            inc_textCursor();
+        } 
     }
+
+    terminal->text_cursor = temp;
+}
+
+void clear_x_cells_at(uint8_t * location, unsigned long x){
+
+    Pixel_t * temp = terminal->text_cursor;
+    terminal->text_cursor = location;
+
+    for(size_t col_idx=0; col_idx< x; col_idx++){
+        
+        print_char(0, terminal->background_color, terminal->background_color);
+        
+        //after setting the last text cell to the bg color, don't increment the cursor, because in the case where we clear all cells in the very bottom of the terminal, inc_textCursor will trigger the whole process of moving the terminal lines up again, which calls this again, in an infinite loop. we don't actually care about the pos of the cursor after this since it is being reset to its OG value, so it doesnt hurt to not increment after clearing the last cell
+        if(col_idx != x-1){
+            inc_textCursor();
+        } 
+    }
+
     terminal->text_cursor = temp;
 }
 
@@ -163,21 +191,42 @@ void shift_text_screen_up_one_row(void){
     uint8_t * curr_text_row = terminal->start;
     
     for(size_t row_in_textbuff=0; row_in_textbuff < terminal->num_rows-1; row_in_textbuff++){
-      
+        
         uint8_t * next_text_row = advance_text_row(curr_text_row);
         memcpy(curr_text_row, next_text_row, num_bytes_in_text_buff_row);
         curr_text_row = next_text_row;
     }
-    //at this point, the current text row will be the last one
-    set_row_color(curr_text_row);
+}
+
+bool move_textCursor_to_new_line_start(void){
+
+    //total cells used for an input = num_chars_in_curr_input_buff + num_text_cells_used_by_prompt 
+    unsigned short total_cells_used = terminal->input.end_idx + strlen(terminal_prompt_msg);
+
+    //round up for how many rows are needed
+    unsigned char rows_needed = (total_cells_used + (terminal->num_cols-1))/terminal->num_cols;
+
+    unsigned int row_idx = get_pixel_term_text_row(terminal->input.start);
+
+    unsigned int next_input_row_idx = row_idx + rows_needed;
+
+    if(next_input_row_idx > (terminal->num_rows-1)){
+        shift_text_screen_up_one_row();
+        terminal->text_cursor = advance_x_text_rows(terminal->start, (terminal->num_rows-1));
+        clear_x_cells(terminal->num_cols);
+    }
+    else{
+        terminal->text_cursor = advance_x_text_rows(terminal->start, next_input_row_idx);
+    }
 }
 
 /**
  * * It is up to a calling program if the cursor should be moved right or not; the default behavior will be to move it right unless its the very bottom right cell, upon which it won't move.*/
 bool inc_textCursor(void){
 
-    Pixel_t * row_start = get_pixel_term_text_row(terminal->text_cursor);
-    
+    unsigned int row_idx = get_pixel_term_text_row(terminal->text_cursor);
+    Pixel_t * row_start = advance_x_text_rows(terminal->start, row_idx);
+
     unsigned int curr_pix_col_idx = get_pixel_term_text_col(row_start, terminal->text_cursor);
     unsigned int last_pix_col_idx_in_one_row = terminal->num_cols-1;
 
@@ -190,12 +239,12 @@ bool inc_textCursor(void){
         if(row_start == last_term_text_row){
             shift_text_screen_up_one_row();
             terminal->text_cursor = last_term_text_row;
+            terminal->input.start = decrement_text_row(terminal->input.start);
+             //at this point, the current text row will be the last one
+            clear_x_cells(terminal->num_cols);
         }
         else{
             terminal->text_cursor = advance_text_row(row_start);
-            //this is an alternate implementation of advancing the cursor, but i think advancing the text row is faster for now
-            // unsigned char overflow_pixels = get_term_row_overflow_pix_count();
-            // terminal->text_cursor += (overflow_pixels + terminal->font.width);
         }
 
     }
@@ -217,11 +266,12 @@ bool dec_textCursor(void){
         return false;
     }
 
-    Pixel_t * row_start = get_pixel_term_text_row(terminal->text_cursor);
+    Pixel_t * row_start = get_pix_row_start(terminal->text_cursor);
     
     if(terminal->text_cursor == row_start){
-        unsigned char overflow_pixels = get_term_row_overflow_pix_count();
-        terminal->text_cursor -= (overflow_pixels + terminal->font.width);
+
+        Pixel_t * one_row_back = (Pixel_t *) decrement_text_row(row_start);
+        terminal->text_cursor = one_row_back + terminal->font.width*(terminal->num_cols-1);
     }
     else{
         terminal->text_cursor  -= terminal->font.width;
@@ -230,37 +280,24 @@ bool dec_textCursor(void){
     return true;
 }
 
-void terminal_printstr(const char * string, size_t num_chars){
-    for(size_t idx=0; idx<num_chars; idx++){
-        terminal_putchar(string[idx], terminal->font_color, DONT_SET);
-        inc_textCursor();
+bool inc_textCursor_x_times(unsigned int x){
+    for(unsigned int idx=0; idx<x; idx++){
+        if(inc_textCursor()){
+
+        }
+        else{
+            return false;
+        }
     }
-    plot_text_cursor();
+    return false;
 }
 
-terminal_t * init_terminal(void){
-    terminal_t * new_terminal = kmalloc(sizeof(terminal_t));
-    
-    new_terminal->background_color = GRAY;
-    new_terminal->font_color = BLACK;
-    new_terminal->cursor_color = SILVER;
-
-    set_font(DEFAULT_FONT, &new_terminal->font);
-    
-    //TODO: as long as my GUI is just a shell interface, these will be constant, but once an event-driven UI is made, these must be passed
-    new_terminal->top_boundary_y = 20;
-    new_terminal->bottom_boundary_y = framebuffer.height - 20;
-    new_terminal->left_boundary_x = 20;
-    new_terminal->right_boundary_x = framebuffer.width - 20;
-
-    new_terminal->num_cols = (new_terminal->right_boundary_x - new_terminal->left_boundary_x)/new_terminal->font.width;
-    new_terminal->num_rows = (new_terminal->bottom_boundary_y - new_terminal->top_boundary_y)/new_terminal->font.height;
-
-    new_terminal->start = calc_fb_addy_from_pix_vals(new_terminal->left_boundary_x, new_terminal->top_boundary_y);
-    
-    new_terminal->text_cursor = new_terminal->start;
-
-    return new_terminal;
+void print_str(const char * string, size_t num_chars){
+        
+    for(size_t idx=0; idx<num_chars; idx++){
+        print_char(string[idx], terminal->font_color, terminal->background_color);
+        inc_textCursor();
+    }
 }
 
 void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * framebuffer_info){
@@ -268,6 +305,7 @@ void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * frameb
     framebuffer.starting_address = (uint8_t *)(uint32_t)framebuffer_info->common.framebuffer_addr;
     framebuffer.width = framebuffer_info->common.framebuffer_width;
     framebuffer.height = framebuffer_info->common.framebuffer_height;
+    framebuffer.pitch = framebuffer_info->common.framebuffer_pitch;
 
     framebuffer.pixel.total_bits = framebuffer_info->common.framebuffer_bpp;
     framebuffer.pixel.num_red_bits = framebuffer_info->framebuffer_red_mask_size;
@@ -282,7 +320,5 @@ void initialize_framebuffer_attributes(struct multiboot_tag_framebuffer * frameb
     init_MMIO_device(framebuffer.starting_address, framebuffer_mmio_length);
 
     fb_pixel_map = framebuffer.starting_address;
-
-    terminal = (terminal_t *) init_terminal();
 }
 
