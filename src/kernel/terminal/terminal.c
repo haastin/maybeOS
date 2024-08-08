@@ -51,6 +51,11 @@ void print_prompt(void){
     print_str(terminal_prompt_msg, strlen(terminal_prompt_msg));
 }
 
+void print_shell_output(char * output){
+    print_str(output, strlen(output));
+    move_textCursor_to_new_line_start_from_textCursor();
+}
+
 void start_shell(){
     
     //the shell starts here and never returns, but will only do something if a flag it polls is set, indicating a full line of input is meant to be processed by the shell. input is processed in a seperate file, but all of this processing is called from the keyboard ISR, which isn't great because it makes the response to a keyboard press longer. but, without a spinlock or anything else, it is the only way to ensure that the input is processed before more keypresses come in and override what is prev in the buffer

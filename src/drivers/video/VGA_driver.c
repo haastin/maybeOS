@@ -220,6 +220,22 @@ bool move_textCursor_to_new_line_start(void){
     }
 }
 
+bool move_textCursor_to_new_line_start_from_textCursor(void){
+
+    unsigned int row_idx = get_pixel_term_text_row(terminal->text_cursor);
+
+    unsigned int next_input_row_idx = row_idx + 1;
+
+    if(next_input_row_idx > (terminal->num_rows-1)){
+        shift_text_screen_up_one_row();
+        terminal->text_cursor = advance_x_text_rows(terminal->start, (terminal->num_rows-1));
+        clear_x_cells(terminal->num_cols);
+    }
+    else{
+        terminal->text_cursor = advance_x_text_rows(terminal->start, next_input_row_idx);
+    }
+}
+
 /**
  * * It is up to a calling program if the cursor should be moved right or not; the default behavior will be to move it right unless its the very bottom right cell, upon which it won't move.*/
 bool inc_textCursor(void){

@@ -86,6 +86,8 @@ void clear_x_cells(unsigned long x);
 //move the text cursor to the start of the line after it (or the start of the same line if the text cursor is in the last row of the terminal)
 bool move_textCursor_to_new_line_start(void);
 
+bool move_textCursor_to_new_line_start_from_textCursor(void);
+
 //operations to move the current location of the text cursor
 bool inc_textCursor(void);
 bool dec_textCursor(void);

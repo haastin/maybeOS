@@ -109,10 +109,7 @@ static void init_inputBuffCursor(void){
     terminal->input.cursor_pos_idx = terminal->input.end_idx;
 }
 
-static void initialize_new_input_line(void){
-    //move the text cursor to a new line if it isn't at the beginning of one, and restart the prompt
-   
-    move_textCursor_to_new_line_start();
+static void initialize_new_input_line(void){   
 
     //reset input buffer cursors here so that the last row of the input can be detected and the terminal can go to the proper row to print the new prompt
 
@@ -366,10 +363,12 @@ static void handle_special_keycode(unsigned short keycode, bool isBreakCode){
             if(!isBreakCode){
 
                 //TODO: without any locks, we cannot let the shell have access to the buff on its own; we must have the shell processing and output all be completed from here, which itself came from the ISR. this needs to be fixed in the future
-        
-                shell_input(terminal->input.command_buff[0]);
 
                 unplot_text_cursor(terminal->input.command_buff[0][terminal->input.cursor_pos_idx]);
+                
+                move_textCursor_to_new_line_start();
+        
+                shell_input(terminal->input.command_buff[0]);
                 
                 log_and_reset_input_buffers();
 

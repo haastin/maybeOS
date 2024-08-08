@@ -118,7 +118,74 @@ void *memchr(const void * s, int c, size_t n){
     return NULL;
 }
 
+char * strchr(const char * s, int c){
+    size_t idx =0;
+    while(s[idx] != (char) c){
+        idx++;
+        if(s[idx] == '\0'){
+            if((char) c == '\0'){
+                return &s[idx];
+            }
+            else{
+                return NULL;
+            }
+        }
+    }
+    
+}
+
+char * strtok(char * restrict s1, const char * restrict s2){
+
+    //Static variable to remember the previous position where strok left off in the last call to it
+    static char *saved_position; 
+      
+
+    //in this case s1 is not null and we are searching a new string
+    if (s1 != NULL) {
+        saved_position = s1;
+    }
+
+    //if there is no position in the string to be saved anymore, then there are no more tokens to return, so return null
+    if (saved_position == NULL) {
+        return NULL;
+    }
+
+    //Another pointer to manipulate, because we don't want to lose the saved position if it won't be updated in this call
+    char *start;
+    start = saved_position;
+
+    //this checks to see if the start of the string has any delimiters, and if so, it skips them.
+    while (*start && strchr(s2, *start)) {
+        start++;
+    }
+    //if there are ONLY delimiters in the string, null is returned, since there are no tokens 
+    if (*start == '\0') {
+        saved_position = NULL;
+        return NULL;
+    }
+
+    //now that we've hit the first non-delimiter in the string, increment further until the next delimiter is found
+    char *end = start;
+    while (*end && !strchr(s2, *end)) {
+        end++;
+    }
+
+    //if the end of the string hasn't been reached, replace the delimiter with '\0'
+    if (*end != '\0') {
+        *end = '\0';
+        //we've found the first token and have not reached the end of the string yet, so the next part of the string to search is saved, and will be searched if strok is called again with NULL as s1, to indicate that the same string is requested to continue to be searched
+        saved_position = end + 1; 
+    } 
+    else {
+        //if we reach here, the end of the string has been reached without finding any more delimiters
+        saved_position = NULL;
+    }
+
+    return start;
+}
+
 //Functions in Misc section in ISO C
+
 void * memset(void* buff, int c, size_t n){
     unsigned char *buff_ptr = (unsigned char*) buff;
     for(size_t i=0; i<n; i++){
