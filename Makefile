@@ -14,6 +14,7 @@
 
 CC = i686-elf-gcc 
 AS = i686-elf-as
+OBJCOPY = objcopy
 
 SRCDIR := src
 BUILDDIR := build
@@ -27,7 +28,8 @@ DEBUG_ENV_VAR ?=
 DEFINED_MACROS := -DPAGE_SIZE_4K -DARCH_x86
 CFLAGS := -ffreestanding -Wall -Wextra $(INCLUDE_PATHS) $(DEFINED_MACROS) -O0 $(DEBUG_ENV_VAR) #-Werror
 AFLAGS := -E -P $(INCLUDE_PATHS)
-LDFLAGS := -T linker.ld -ffreestanding -nostdlib -lgcc -Wall -Wextra $(DEBUG_ENV_VAR) 
+LDFLAGS := -T linker.ld -ffreestanding -nostdlib -lgcc -Wall -Wextra $(DEBUG_ENV_VAR)
+OBJCOPY_FLAGS := -O elf32-i386 -B i386 -I binary
 
 #these find commands recursively search the srcdir and grabs the relative path of all files matching the regex and returns them
 SOURCES := $(shell find $(SRCDIR) -type f -name '*.c')
@@ -64,6 +66,12 @@ build/%.o: %.c
 build/%.o: %.S
 	$(CC) $(AFLAGS) $< -o build/$*.i
 	$(AS) build/$*.i -o $@
+
+build/%.o: %.psfu
+	$(OBJCOPY) $(OBJCOPY_FLAGS) $< -o $@
+
+build/%.o: %.tga
+	$(OBJCOPY) $(OBJCOPY_FLAGS) $< -o $@
 	
 clean:
 	rm -rf $(BUILDDIR)/*.o $(BUILDDIR)/*.i $(TARGET)

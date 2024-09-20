@@ -37,97 +37,63 @@ static Page_Table_Entry_t before_paging_create_pte(unsigned long aligned_physica
     return pte;
 }
 
-static void create_paging_entry(unsigned long aligned_phys_addy, unsigned long virt_addy){
-
-    Page_Directory_t * phys_kern_pagedir = (Page_Directory_t *) phys_addy(&kernel_PGD);
-    Page_Table_t * phys_kern_pagtab;
-
-    //choose the page table declared in the static image based on if we are identity mapping or mapping the virtual kernel (they will have differnt page directory indices so we need two page tables)
-    if (aligned_phys_addy == virt_addy){
-        phys_kern_pagtab = (Page_Table_t *) phys_addy(&kernel_identitymap_PT);
-    }
-    else{
-        phys_kern_pagtab = (Page_Table_t *) phys_addy(&kernel_directmap_PT);
-    }
-
-    unsigned short page_dir_index = get_PDE_idx(virt_addy);
-
-    #ifdef PAGE_SIZE_4K
-
-    //initialize PDE for this virtual address if necessary
-    bool dirEntryIsPresent = phys_kern_pagedir->page_tables[page_dir_index].pde_val & 0x1;
-    if(!dirEntryIsPresent){
-        phys_kern_pagedir->page_tables[page_dir_index] = before_paging_create_pde((unsigned long)phys_kern_pagtab);
-    }
-
-    //initialize PTE for this virtual address
-    unsigned short page_tab_index = get_PTE_idx(virt_addy);
-    phys_kern_pagtab->page_frames[page_tab_index] = before_paging_create_pte(aligned_phys_addy);
-
-    #else
-    //for 4 MiB pages, the PDE is just the page frame addy of the page and its flags, no page table
-    phys_kern_pagedir->page_tables[page_dir_index] = before_paging_create_pde(aligned_phys_addy);
-    #endif
-}
-
 /**
  * * This function will be linked at the physical starting address of the kernel, not virtual, so that we can call it before enabling paging
  */
 void before_paging_init_page_tables(unsigned long kernel_starting_phys_addy, unsigned long kernel_starting_virt_addy){
 
     Page_Directory_t * phys_kern_pagedir = (Page_Directory_t *) phys_addy(&kernel_PGD);
-    Page_Table_t * phys_kern_identity_pagetab = (Page_Table_t *) phys_addy(&kernel_identitymap_PT);
-    Page_Table_t * phys_kern_virtual_pagetab = (Page_Table_t *) phys_addy(&kernel_directmap_PT);
+    Page_Table_t * zero_to_four_MiB_PT_phys_addy = (Page_Table_t *) phys_addy(&zero_to_four_MiB_PT);
+    Page_Table_t * four_to_eight_MiB_PT_phys_addy = (Page_Table_t *) phys_addy(&four_to_eight_MiB_PT);
 
     //init entries of page dir and page tables
     early_memset(phys_kern_pagedir, 0, sizeof(Page_Directory_t));
-    early_memset(phys_kern_identity_pagetab, 0, sizeof(Page_Table_t));
-    early_memset(phys_kern_virtual_pagetab, 0, sizeof(Page_Table_t));
+    early_memset(zero_to_four_MiB_PT_phys_addy, 0, sizeof(Page_Table_t));
+    early_memset(four_to_eight_MiB_PT_phys_addy, 0, sizeof(Page_Table_t));
 
-    //decided to identity map everything before the kernel too since there's boot info there I need
-    unsigned int num_pages_before_kernel = get_page_above_pfn(kernel_starting_phys_addy); 
+    //these two for loops map all page frames [0x000000-0x7ff000]
 
-    for(size_t page=0; page < num_pages_before_kernel; page++){
+    //page tab 1 - page frames: [0x000000 - 0x3ff000]
+    for(size_t page=0; page < NUM_PAGING_STRUCTURE_ENTRIES_IN_32_BIT_MODE; page++){
         
         uint32_t curr_aligned_phys_addy_being_mapped = 0 + page*PAGE_SIZE;
+
+        zero_to_four_MiB_PT_phys_addy->page_frames[page] = before_paging_create_pte(curr_aligned_phys_addy_being_mapped);
         
-        //this is the same as above because we are identity mapping the kernel
-        uint32_t curr_aligned_virt_addy_being_mapped = curr_aligned_phys_addy_being_mapped;
-        
-        create_paging_entry(curr_aligned_phys_addy_being_mapped, curr_aligned_virt_addy_being_mapped);
     }
     
-   
-    //round up to the nearest multiple of pages
-    unsigned int kernel_size = (unsigned int)&_kernel_size;
-    unsigned int kernel_size_in_pages = get_page_above_pfn(kernel_size);
-    
-    //this identity maps the kernel pages
-    for(size_t page=0;page<kernel_size_in_pages;page++){
-
-        uint32_t curr_aligned_phys_addy_being_mapped = kernel_starting_phys_addy + page*PAGE_SIZE;
+    //page tab 2 - page frames: [0x400000 - 0x7ff000]
+    for(size_t page=0; page < NUM_PAGING_STRUCTURE_ENTRIES_IN_32_BIT_MODE; page++){
         
-        //this is the same as above because we are identity mapping the kernel
-        uint32_t curr_aligned_virt_addy_being_mapped = curr_aligned_phys_addy_being_mapped;
-        
-        create_paging_entry(curr_aligned_phys_addy_being_mapped, curr_aligned_virt_addy_being_mapped);
+        //starts at 0x400000
+        uint32_t curr_aligned_phys_addy_being_mapped = PAGE_SIZE*NUM_PAGING_STRUCTURE_ENTRIES_IN_32_BIT_MODE + page*PAGE_SIZE;
 
+        four_to_eight_MiB_PT_phys_addy->page_frames[page] = before_paging_create_pte(curr_aligned_phys_addy_being_mapped);
+        
     }
 
-    //this maps the part of our kernel linked at the specified virtual address
-    for(size_t page=0;page<kernel_size_in_pages;page++){
+    //create the page directory entries for identity map and direct map
 
-        uint32_t curr_aligned_phys_addy_being_mapped = kernel_starting_phys_addy + page*PAGE_SIZE;
-        
-        uint32_t curr_aligned_virt_addy_being_mapped = kernel_starting_virt_addy + page*PAGE_SIZE;
-        
-        create_paging_entry(curr_aligned_phys_addy_being_mapped, curr_aligned_virt_addy_being_mapped);
+    //identity map
+    unsigned long identity_map_start = 0x0;
+    unsigned long second_identity_map_page_start = identity_map_start+  PAGE_SIZE*NUM_PAGING_STRUCTURE_ENTRIES_IN_32_BIT_MODE;
 
-    }
+    phys_kern_pagedir->page_tables[get_PDE_idx(identity_map_start)] = before_paging_create_pde((unsigned long)zero_to_four_MiB_PT_phys_addy);
+
+    phys_kern_pagedir->page_tables[get_PDE_idx(second_identity_map_page_start)] = before_paging_create_pde((unsigned long)four_to_eight_MiB_PT_phys_addy);
+
+    //direct map
+    unsigned long virtual_map_start = VIRTUAL_KERNEL_OFFSET;
+    unsigned long second_virtual_map_page_start = virtual_map_start + PAGE_SIZE*NUM_PAGING_STRUCTURE_ENTRIES_IN_32_BIT_MODE;
     
-    //because the recursive entry is at index 936 in the paging structures, nothing should be using the existing kernel or HW mappings in this table, so it's likely ok to overwrite them. need to do this here because going forward page tables only have their address only referred to with a recursive mapping, which these don't initially have.
-    
-    phys_kern_identity_pagetab->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX] = before_paging_create_pte(phys_addy(&kernel_identitymap_PT));
+    phys_kern_pagedir->page_tables[get_PDE_idx(virtual_map_start)] = before_paging_create_pde((unsigned long)zero_to_four_MiB_PT_phys_addy);
 
-    phys_kern_virtual_pagetab->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX] = before_paging_create_pte(phys_addy(&kernel_directmap_PT));
+    phys_kern_pagedir->page_tables[get_PDE_idx(second_virtual_map_page_start)] = before_paging_create_pde((unsigned long)four_to_eight_MiB_PT_phys_addy);
+    
+    //* while all other dynamically created page tables must be accessed through their recursive entries, the statically allocated page tables do not need to be since they are direct mapped as part of the kernel
+
+    //create the recursive PGD entry so that PTs can be accessed through it
+    phys_kern_pagedir->page_tables[RECURSIVE_PDE_IDX] = before_paging_create_pde((unsigned long)phys_kern_pagedir);
+
+    //TODO: check to see if the kernel image extends past the mapped mem, if so throw an exception
 }

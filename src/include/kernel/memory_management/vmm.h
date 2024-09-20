@@ -23,6 +23,8 @@ typedef struct dynam_alloc_area{
 
 #define VM_AREA_MMIO (1 << 3)
 
+#define VM_AREA_NO_ACCESS (1 << 4)
+
 
 #endif /*__VMM_H__*/
 

@@ -32,6 +32,8 @@ __attribute__((aligned(8))) struct segment_descriptor gdt[NUM_GDT_ENTRIES];
 
 extern struct multiboot_bootinfo mb_bootinfo;
 
+extern char _binary_space_x_logo_tga_start[];
+
 
 static void init_idt(void){
     extern uint32_t arch_defined_interrupts_start;
@@ -103,6 +105,9 @@ void kernel_start(uint32_t multiboot2_bootinfo_startaddress){
 
     //enables keyboard
     initialize_peripheral_devices();
+
+    //print logo
+    //render_image(_binary_space_x_logo_tga_start, framebuffer.height, framebuffer.width, framebuffer.width/2, framebuffer.height/2);
 
     init_terminal_subsystem();
 

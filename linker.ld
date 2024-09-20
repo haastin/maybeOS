@@ -74,7 +74,7 @@ SECTIONS
 	_virt_kernel_end = .;
 
 	_kernel_phys_size = _phys_kernel_end - _phys_kernel_start;
-	_kernel_virt_size = _virt_kernel_end - _virt_kernel_start ;
+	_kernel_virt_size = _virt_kernel_end - _virt_kernel_start;
 
 	_kernel_size = _kernel_phys_size + _kernel_virt_size;
 }

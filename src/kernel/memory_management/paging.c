@@ -9,29 +9,31 @@
 
 Page_Directory_t kernel_PGD __attribute__((aligned(0x1000)));
 
-//need two page tables since the identity map and mapping the virtual kernel will have two diff page dir indexes
-Page_Table_t kernel_identitymap_PT __attribute__((aligned(0x1000)));
-Page_Table_t kernel_directmap_PT __attribute__((aligned(0x1000)));
+//need two page tables to map 0x000000-0x7ff000, which should map everything before my kernel and my entire kernel image
+Page_Table_t zero_to_four_MiB_PT __attribute__((aligned(0x1000)));
+Page_Table_t four_to_eight_MiB_PT __attribute__((aligned(0x1000)));
 
 Page_Table_Entry_t * get_pte(void * pgd, unsigned long virtual_address){
 
     Page_Directory_t * pgd_p = (Page_Directory_t *) pgd;
 
-    unsigned int pde_idx = get_PDE_idx((uintptr_t)virtual_address); 
-    Page_Directory_Entry_t * pde_p = (Page_Directory_Entry_t *) &pgd_p->page_tables[pde_idx];
-    if(!pde_p){
-        //TODO: printk error- page tab doesnt exist
-        return false;
+    if(pgd == &kernel_PGD){
+        unsigned int page_tab_pde_idx = get_PDE_idx((uintptr_t)virtual_address);
+        Page_Table_t * pt_p = (Page_Table_t *) get_page_tab_virtual_pointer(page_tab_pde_idx);
+        if(!pt_p){
+            //TODO: printk error- page tab doesnt exist
+            return NULL;
+        }
+        unsigned int pte_idx = get_pte_idx((uintptr_t)virtual_address);  
+        Page_Table_Entry_t * pte_p = (Page_Table_Entry_t *) &pt_p->page_frames[pte_idx];
+        //doesnt matter the state of the pte; it will be zeroed anyway
+        return pte_p;
+    }
+    else{
+        //TODO: user space PGD handling goes here
     }
 
-    //doesnt matter if pte is already or not, we will zero it anyway
-
-    Page_Table_t * pt_p = (Page_Table_t *) get_page_tab_virtual_pointer(pde_idx);
-
-    unsigned int pte_idx = get_PTE_idx((uintptr_t)virtual_address);  
-    Page_Table_Entry_t * pte_p = (Page_Table_Entry_t *) &pt_p->page_frames[pte_idx];
-
-    return pte_p;
+    return NULL;
 }
 
 bool free_mapping(void* pgd, unsigned long virtual_address){
@@ -46,30 +48,31 @@ static inline void init_pde(Page_Directory_Entry_t * pde_p, unsigned long physic
     pde_p->pde_val |= flags;
 }
 
-void create_recursive_mapping(void *pgd, void * phys_address){
+//TODO: this should be more like create PGD, and then inside here you will create it, insert its recursive address, make a call to the vmm to mark its memory as used
+// void create_recursive_mapping(void *pgd, void * phys_address){
 
-    bool mapped = map_pageframe(pgd, phys_address, NEW_PAGE_TAB_TEMP_VIRT_POINTER, VM_AREA_WRITE);
-    if(!mapped){
-        //TODO: printk error- temp mapping for new page tab failed
-        return;
-    }
+//     bool mapped = map_pageframe(pgd, phys_address, NEW_PAGE_TAB_TEMP_VIRT_POINTER, VM_AREA_WRITE);
+//     if(!mapped){
+//         //TODO: printk error- temp mapping for new page tab failed
+//         return;
+//     }
 
-    Page_Table_t * pt_p = (Page_Table_t *) NEW_PAGE_TAB_TEMP_VIRT_POINTER;
-    pt_p->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX].pte_val = phys_address;
-    pt_p->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX].pte_val |= KERNEL_PTE_DEFAULT_FLAGS;
+//     Page_Table_t * pt_p = (Page_Table_t *) NEW_PAGE_TAB_TEMP_VIRT_POINTER;
+//     pt_p->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX].pte_val = phys_address;
+//     pt_p->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX].pte_val |= KERNEL_PTE_DEFAULT_FLAGS;
     
-    free_mapping(pgd, pt_p);
+//     free_mapping(pgd, pt_p);
 
-    //TODO: was having probs flushign TLB wihtout the full flush, but need to get that up
-    asm volatile("mov %cr3, %eax\n"
-                 "mov %eax, %cr3\n");
+//     //TODO: was having probs flushign TLB wihtout the full flush, but need to get that up
+//     asm volatile("mov %cr3, %eax\n"
+//                  "mov %eax, %cr3\n");
     
-    //unsigned int pde_idx = get_PDE_idx(pt_p);
-    //unsigned long pt_holding_const_temp_virt_pointer = get_page_tab_virtual_pointer(pde_idx);
+//     //unsigned int pde_idx = get_PDE_idx(pt_p);
+//     //unsigned long pt_holding_const_temp_virt_pointer = get_page_tab_virtual_pointer(pde_idx);
     
-    //need to invalidate the tlb cached addresses when changing a mapping
-    //asm volatile ("invlpg (%0)\n" : : "r" (pt_p->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX]) :"memory" );
-}
+//     //need to invalidate the tlb cached addresses when changing a mapping
+//     //asm volatile ("invlpg (%0)\n" : : "r" (pt_p->page_frames[PAGE_TAB_RECURSIVE_ENTRY_INDEX]) :"memory" );
+// }
 
 static void alloc_page_table(void * pgd, unsigned int pde_index){
 
@@ -86,9 +89,6 @@ static void alloc_page_table(void * pgd, unsigned int pde_index){
     Page_Directory_t * pgd_p = (Page_Directory_t *) pgd;
     Page_Directory_Entry_t * pde_p = (Page_Directory_Entry_t *) &pgd_p->page_tables[pde_index];
     init_pde(pde_p, phys_address, KERNEL_PDE_DEFAULT_FLAGS);
-
-    //make a recursive mapping in this newly created page table
-    create_recursive_mapping(&kernel_PGD, phys_address);
 }
 
 static size_t convert_flags_to_arch_flags(size_t kernel_obj_flags){
@@ -115,6 +115,9 @@ static size_t convert_flags_to_arch_flags(size_t kernel_obj_flags){
     return converted_flags;
 }
 
+/**
+ * No virtual addresses in the range of recursive PGD entries should be a parameter
+ */
 bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, size_t flags){
 
     Page_Directory_t * pgd_p = (Page_Directory_t *) pgd;
@@ -141,6 +144,8 @@ bool map_pageframe(void * pgd, void * pageframe_phys_addy, void * virtual_addy, 
 
         size_t flags_converted = convert_flags_to_arch_flags(flags);
         pte_p->pte_val |= flags_converted;
+
+        asm volatile ("invlpg (%0)\n" : : "r" (virtual_addy) :"memory" );
 
     }
     else{
@@ -176,6 +181,9 @@ bool identity_map_pageframes(void * pgd, unsigned long physical_address_start, s
     return true;
 }
 
+/**
+ * Direct maps (aka adds the kernel virtual memory offset to) a selected physical address range. This is different than the general contiguous mapping func because the contiguous mapping func may not be at the kernel vm offset
+ */
 bool direct_map_pageframes(void * pgd, unsigned long physical_address_start, size_t flags, size_t num_pages){
     
     for(size_t page=0; page<num_pages; page++){

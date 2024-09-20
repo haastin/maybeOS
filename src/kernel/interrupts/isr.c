@@ -55,15 +55,13 @@ static void dump_state(struct process_context_t * process_frame){
     char vec_num[MAX_HEX_ADDRESS_STR_LEN];
     num_to_hex_string(process_frame->vector_num,vec_num);
 
-    char eip_msg[MAX_MESSAGE_SIZE];
-    char eflags_msg[MAX_MESSAGE_SIZE];
-    char vec_msg[MAX_MESSAGE_SIZE];
+    char eip_msg[MAX_MESSAGE_SIZE] = "\nEIP: ";
+    char eflags_msg[MAX_MESSAGE_SIZE] = "\nEflags: ";
+    char vec_msg[MAX_MESSAGE_SIZE] = "\nInterrupt Vector: ";
 
-    char * newline = "\n";
-
-    strcat(strcat(strcat(eip_msg, "EIP: "), eip_str), newline);
-    strcat(strcat(strcat(eflags_msg, "Eflags: "), eflags_str), newline);
-    strcat(strcat(strcat(vec_msg, "Interrupt Vector: "), vec_num), newline);
+    strcat(eip_msg, eip_str);
+    strcat(eflags_msg, eflags_str);
+    strcat(vec_msg, vec_num);
 
     char full_msg[MAX_MESSAGE_SIZE]; 
     strcat(strcat(strcat(full_msg, eip_msg), eflags_msg), vec_msg);
@@ -73,8 +71,8 @@ static void dump_state(struct process_context_t * process_frame){
         char error_code[MAX_HEX_ADDRESS_STR_LEN]; 
         num_to_hex_string(process_frame->error_code, error_code);
         
-        char error[MAX_MESSAGE_SIZE];
-        strcat(strcat(strcat(error, "Error code: "), error_code), newline);
+        char error[MAX_MESSAGE_SIZE] = "\nError code: ";
+        strcat(error, error_code);
 
         strcat(full_msg, error); 
     }

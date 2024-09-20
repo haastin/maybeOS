@@ -66,7 +66,7 @@ void init_memory(struct multiboot_tag_mmap *mmap_tag){
     //the vmm initializes the kheap so it can remember the area it allocated to the kheap, init the kheap, and then create its dynamic alloc area which will mark that area of the kernel virt addy space as used. that relies on kmalloc, so otherwise the vmm would have to remember the area it gave to the kheap across function calls if not packaged within the same function
     vmm_init_kheap();
 
-    //can only init after the mm system is setup
+    //can only init after the mm system is setup. preserves ACPI info so it doesnt get overwritten, is not a real device
     init_MMIO_device(acpi_entry->addr, acpi_entry->len);
 }
 
