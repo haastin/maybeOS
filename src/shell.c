@@ -61,13 +61,16 @@ static char* parse_input(char * input){
 
 void shell_input(char * input){
 
+    size_t input_str_size = strlen(input);
+
+    char * input_cpy = (char*) kmalloc(strlen(input) +1);
+    strncpy(input_cpy, input, strlen(input));
     //TODO: this should obvi be a true parser with a dynamic container to hold the command and args, and a lookup table to store the command names with their correpsonding built-in functions
-    char * cmd = strtok(input, delims);
+    char * cmd = strtok(input_cpy, delims);
     char * param = NULL;
     char* out;
     if(cmd){
-        param = strtok(NULL, delims);
-    }
+        param = input + strlen(cmd) +1;
     
     if(strcmp(cmd, maybeOS_cmd) == 0){
         out = maybeOS();
@@ -78,7 +81,9 @@ void shell_input(char * input){
     else{
         out = "Unrecognized command. Please try again. ";
     }
+    }
     print_shell_output(out);
+    kfree(input_cpy);
     return;
 }
 

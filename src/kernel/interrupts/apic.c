@@ -44,7 +44,10 @@ static inline void write_ioapic_reg(uint32_t data);
 
 void initialize_ioapic(){
 
+    //get the IOAPIC address for this system from the ACPI
     Array_t ioapic_desciptors = get_interruptcontroller(IOAPIC);
+
+    //TODO: does this intialize all IOAPICS returned if all are technically located at the same addy for each core?
     struct IOAPIC_Desc * ioapic_desc = ioapic_desciptors.data[0];
     ioapic.IO_Register_Selector = ioapic_desc->physical_base_address;
     ioapic.IO_Window_Register = ioapic_desc->physical_base_address + 0x10;
@@ -53,6 +56,7 @@ void initialize_ioapic(){
     initialize_irt();
 }
 
+//TODO: this is incomplete and isn't truly handled. fix it.
 void initialize_interrupt_source_overrides(void){
     Array_t iso_array; 
     iso_array = get_interruptcontroller(ISO);
@@ -63,10 +67,17 @@ void initialize_interrupt_source_overrides(void){
 
 }
 
+/**
+ * 
+ */
 void initialize_irt(void){
     
+    //this can either be a set of processors or a single processor. this means that interrupts can have the processors they are sent to chosen by setting this field in the IRT entry for this interrupt
     volatile uint32_t lapic_id = lapic->ID;
+
+    //TODO: the only IRT we build for the moment. when more are added this needs to be changed from hardcoded
     unsigned char keyboard_irq = 1;
+
     union Interrupt_Redirection_Table_Entry irq_irt_entry = build_irt_entry(keyboard_irq, lapic_id);
     set_irt_entry(keyboard_irq, irq_irt_entry);
 
@@ -104,6 +115,7 @@ void set_irt_entry(unsigned char irq_idx, union Interrupt_Redirection_Table_Entr
     unsigned char irq_irt_entry_lowbits_reg = IOAPIC_IRT_BASE_REG + irq_idx*2; 
     unsigned char irq_irt_entry_highbits_reg = irq_irt_entry_lowbits_reg+1;
 
+    //TODO: put these reads here to debug originally, but i can prob delete them or put them in #ifdefs for some debug version of the OS exe or something 
     uint32_t res_low = read_ioapic_reg(irq_irt_entry_lowbits_reg);
     uint32_t res_high =read_ioapic_reg(irq_irt_entry_highbits_reg);
 
